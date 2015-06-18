@@ -22,7 +22,7 @@ Gem::Gem()
 ,_roots(0)
 ,_chain(0)
 ,_change(NoChange)
-,_score(1)
+,_score(0)
 ,_sick(false)
 ,_GemKind(NormalGem)
 ,_frozenSprite(NULL)
@@ -41,6 +41,7 @@ Gem::Gem()
 ,_skAnimaID(0)
 ,_sameAndSkill(false)
 ,_endGem(false)
+,_removeAlready(false)
 {
     _vecLeftGem.clear();
     _vecRightGem.clear();
@@ -280,6 +281,52 @@ void Gem::removeNoCollect(bool playMusic)
 //    _spr->setVisible(false);
 //    _spr->setAnchorPoint(Vec2(0.5, 0.4));
 //    this->runAction(Sequence::create(ScaleTo::create(kRemoveScaleLargeTime,1.2)/*,explodeRandomMusic*/,ScaleTo::create(kRemoveScaleSmallTime,0.8),CallFunc::create(CC_CALLBACK_0(Gem::explosionParticle, this)),CallFunc::create(CC_CALLBACK_0(Gem::hideSprite, this)),CallFunc::create(CC_CALLBACK_0(Gem::removeGem, this)),NULL));
+    MyPoint myPoint = getCurrentIndex(this->getPosition());
+    int i = myPoint.x,j=myPoint.y;
+    
+    if(i-1>=0&&_gemStoneMatrix[i-1][j])
+    {
+        _gemStoneMatrix[i-1][j]->affected(0);
+    }
+    if(i+1<kMatrixWidth&&_gemStoneMatrix[i+1][j])
+    {
+        _gemStoneMatrix[i+1][j]->affected(0);
+    }
+    if(j-1>=0&&_gemStoneMatrix[i][j-1])
+    {
+        _gemStoneMatrix[i][j-1]->affected(0);
+    }
+    if(j+1<kMatrixWidth&&_gemStoneMatrix[i][j+1])
+    {
+        _gemStoneMatrix[i][j+1]->affected(0);
+    }
+    
+    if(_frozen>0||_restrain>0||_roots>0||_chain>0)
+    {
+        if(_frozen>0)
+        {
+            _frozen--;
+            frozenOff();
+        }
+        else if(_restrain>0)
+        {
+            _restrain--;
+            restrainOff();
+        }
+        else if(_roots>0)
+        {
+            _roots--;
+            rootsOff();
+        }
+        else if(_chain>0)
+        {
+            _chain--;
+            chainOff();
+        }
+        
+        return;
+    }
+    
     
     MyPoint mp = getCurrentIndex(this->getPosition());
     
@@ -295,7 +342,9 @@ void Gem::removeNoCollect(bool playMusic)
         if (iFlag == 1)
         {
             _mapNode->removeChildByTag(mp.x * kMatrixWidth + mp.y , true);
-            __String *str = __String::create("0");
+            
+            int msg = 1000*_score;
+            __String *str = __String::createWithFormat("%d",msg);
             NotificationCenter::getInstance()->postNotification(kMSG_ShowCollecte,str );
         }
         if(iFlag == 2)
@@ -305,25 +354,156 @@ void Gem::removeNoCollect(bool playMusic)
         }
     }
     
+//    if (_skill)
+//    {
+//        dealWithSkill();
+//        dealWithGem();
+//    }
+//    else
+//    {
+//        if (_nextskill)
+//        {
+//            _skill = _nextskill;
+//            _nextskill = SkillNull;
+//            setSkillSpr();
+//            setGemType();
+//        }
+//    }
+    
+    if (_state == -1 || (_type == all && _state == all))
+    {
+        _removeAlready = true;
+        this->runAction(Sequence::create(/*ScaleTo::create(kRemoveScaleLargeTime,1.2),ScaleTo::create(kRemoveScaleSmallTime,0.8),*/CallFuncN::create(CC_CALLBACK_1(Gem::playExplodeRandomMusic, this))/*,action*/,CallFunc::create(CC_CALLBACK_0(Gem::explosionParticle, this)),CallFunc::create(CC_CALLBACK_0(Gem::addCollectGem, this)),CallFunc::create(CC_CALLBACK_0(Gem::removeSkillSpr, this)),CallFunc::create(CC_CALLBACK_0(Gem::hideSprite, this)),CallFunc::create(CC_CALLBACK_0(Gem::removeGem, this)),NULL));
+    }
+}
+
+void Gem::createSkill()
+{
+    for(int i=0;i<kMatrixWidth;i++)
+    {
+        for (int j=0;j<kMatrixWidth; j++)
+        {
+            if (_gemStoneMatrix[i][j] && _gemStoneMatrix[i][j]->canMove()  && _gemStoneMatrix[i][j]->getNextSkill())
+            {
+//                _gemStoneMatrix[i][j]->setGemSkill(_gemStoneMatrix[i][j]->getNextSkill());
+//                _gemStoneMatrix[i][j]->setNextSkill(SkillNull);
+                _gemStoneMatrix[i][j]->setSkillSpr();
+            }
+        }
+    }
+    
+    this->runAction(Sequence::create(DelayTime::create(1.1),CallFunc::create(CC_CALLBACK_0(Gem::triggerSkill, this)), NULL));
+}
+
+void Gem::triggerSkill()
+{
+    vector<ConnectionArea>::iterator it;
+    
+    int i,j;
+    
+    bool trigger = false;
+    
+    for( it =_connectionAreaVector->begin();it!=_connectionAreaVector->end();it++)
+    {
+        j = it->startPoint.y;
+        i = it->startPoint.x;
+        
+        if (it->direction == Up)
+        {
+            for ( ;j < it->startPoint.y + it->count; j++)
+            {
+                if (_gemStoneMatrix[i][j]&&_gemStoneMatrix[i][j]->getGemSkill() && (_gemStoneMatrix[i][j]->getState() == -1 || _gemStoneMatrix[i][j]->getNextSkill()))
+                {
+                    trigger = true;
+                    _gemStoneMatrix[i][j]->beforeExplode();
+                }
+            }
+            
+        }
+        else
+        {
+            for (; i < it->startPoint.x + it->count; i++)
+            {
+                if (it->isInCross)
+                {
+                    MyPoint mp = MyPoint(i, j);
+                    if (mp.equal(it->centerPoint))
+                    {
+                        continue;
+                    }
+                }
+                if (_gemStoneMatrix[i][j]&&_gemStoneMatrix[i][j]->getGemSkill() && (_gemStoneMatrix[i][j]->getState() == -1 || _gemStoneMatrix[i][j]->getNextSkill()))
+                {
+                    trigger = true;
+                    _gemStoneMatrix[i][j]->beforeExplode();
+                }
+                
+            }
+        }
+    }
+
+    
+    if (!trigger)
+    {
+        matchAll();
+    }
+}
+
+void Gem::matchAll()
+{
+    vector<ConnectionArea>::iterator it;
+    
+    int i,j;
+    for( it =_connectionAreaVector->begin();it!=_connectionAreaVector->end();it++)
+    {
+        j = it->startPoint.y;
+        i = it->startPoint.x;
+        
+        if (it->direction == Up)
+        {
+            for ( ;j < it->startPoint.y + it->count; j++)
+            {
+                if (_gemStoneMatrix[i][j] && !_gemStoneMatrix[i][j]->getRemoveAlready())
+                {
+                    _gemStoneMatrix[i][j]->removeNoCollect(false);
+                }
+                
+            }
+            
+        }
+        else
+        {
+            for (; i < it->startPoint.x + it->count; i++)
+            {
+                if (it->isInCross)
+                {
+                    MyPoint mp = MyPoint(i, j);
+                    if (mp.equal(it->centerPoint))
+                    {
+                        continue;
+                    }
+                }
+                if (_gemStoneMatrix[i][j] && !_gemStoneMatrix[i][j]->getRemoveAlready())
+                {
+                    _gemStoneMatrix[i][j]->removeNoCollect(false);
+                }
+            }
+        }
+    }
+
+}
+
+void Gem::beforeExplode()
+{
     if (_skill)
     {
+        removeSkillSpr();
         dealWithSkill();
         dealWithGem();
     }
     else
     {
-        if (_nextskill)
-        {
-            _skill = _nextskill;
-            _nextskill = SkillNull;
-            setSkillSpr();
-            setGemType();
-        }
-    }
-    
-    if (_state == -1 || (_type == all && _state == all))
-    {
-        this->runAction(Sequence::create(/*ScaleTo::create(kRemoveScaleLargeTime,1.2),ScaleTo::create(kRemoveScaleSmallTime,0.8),*/CallFuncN::create(CC_CALLBACK_1(Gem::playExplodeRandomMusic, this))/*,action*/,CallFunc::create(CC_CALLBACK_0(Gem::explosionParticle, this)),CallFunc::create(CC_CALLBACK_0(Gem::addCollectGem, this)),CallFunc::create(CC_CALLBACK_0(Gem::removeSkillSpr, this)),CallFunc::create(CC_CALLBACK_0(Gem::hideSprite, this)),CallFunc::create(CC_CALLBACK_0(Gem::removeGem, this)),NULL));
+        this->removeNoCollect(false);
     }
 }
 
@@ -331,6 +511,12 @@ void Gem::dealWithSkill()
 {
     if (_type == all)
     {
+        MyPoint allPos = getCurrentIndex(this->getPosition());
+        _gemStoneMatrix[allPos.x][allPos.y]->setState(all);
+        _gemStoneMatrix[allPos.x][allPos.y]->removeNoCollect(false);
+        _gemStoneMatrix[allPos.x][allPos.y] = NULL;
+
+        
         GemType fType = empty;
         int i,j,max=0;
         while(fType == empty)
@@ -375,7 +561,7 @@ void Gem::dealWithSkill()
         for (i=0; i<max; i++)
         {
             Gem* distGem =_gemStoneMatrix[distArray[i].x][distArray[i].y];
-            distGem->setState(-1);
+//            distGem->setState(-1);
             Sequence* seq=NULL;
             ccBezierConfig config;
             Point controlPoint = GemAction::getInstance().getControlPoint(startPoint, distGem->getPosition(),(Director::getInstance()->getWinSize().width)*kParticleBezierScale);
@@ -410,11 +596,9 @@ void Gem::dealWithSkill()
             break;
         case SkillAround2:
         case SkillAround1:
-            str = __String::create("jiugong01_effect");
-            break;
         case SkillAround4:
         case SkillAround3:
-            str = __String::create("jiugong02_effect");
+            str = __String::create("jiugong03_effect");
             break;
         default:
             break;
@@ -494,7 +678,15 @@ void Gem::dealWithSkill()
     
     arm->setPosition(this->getPosition());
     setSkAnimaByID(0);
-    arm->getAnimation()->setMovementEventCallFunc(CC_CALLBACK_1(Gem::gemBright, this));
+    
+    if (_skill >= SkillAround1 && _skill <= SkillAround4)
+    {
+        arm->getAnimation()->setMovementEventCallFunc(CC_CALLBACK_1(Gem::aroundAnimation, this));;
+    }
+    else
+    {
+        arm->getAnimation()->setMovementEventCallFunc(CC_CALLBACK_1(Gem::gemBright, this));
+    }
     
     if (_skill == SkillAround1 || _skill == SkillAround3)
     {
@@ -510,14 +702,14 @@ void Gem::dealWithGem()
     
     if (_skill == SkillHorizontal || _skill == SkillCross)
     {
-        for (int i = 0; i < kMatrixWidth; i++)
+        for (int i = 1; i < kMatrixWidth; i++)
         {
             if (mp.x - i >= 0)
             {
-                if (_gemStoneMatrix[mp.x - i][mp.y] && _gemStoneMatrix[mp.x - i][mp.y]->getState() != -1 && _gemStoneMatrix[mp.x - i][mp.y]->getGemSkill() != SkillAround1 && _gemStoneMatrix[mp.x - i][mp.y]->getGemSkill() != SkillAround3 && _gemStoneMatrix[mp.x - i][mp.y]->getGemType() < dragontooth)
+                if (_gemStoneMatrix[mp.x - i][mp.y] && !_gemStoneMatrix[mp.x - i][mp.y]->getNextSkill() && _gemStoneMatrix[mp.x - i][mp.y]->getState() != -1 && _gemStoneMatrix[mp.x - i][mp.y]->getGemSkill() != SkillAround1 && _gemStoneMatrix[mp.x - i][mp.y]->getGemSkill() != SkillAround3 && _gemStoneMatrix[mp.x - i][mp.y]->getGemType() < dragontooth)
                 {
                     _gemStoneMatrix[mp.x - i][mp.y]->setState(-1);
-                    if (_gemStoneMatrix[mp.x - i][mp.y]->getGemSkill() && !_gemStoneMatrix[mp.x - i][mp.y]->getSameAndSkill())
+                    if (_gemStoneMatrix[mp.x - i][mp.y]->getGemSkill() /*&& !_gemStoneMatrix[mp.x - i][mp.y]->getSameAndSkill()*/)
                     {
                         _gemStoneMatrix[mp.x - i][mp.y]->runAction(Sequence::create(DelayTime::create(time),CallFuncN::create(CC_CALLBACK_1(Gem::nextSkill, _gemStoneMatrix[mp.x - i][mp.y])), NULL));
                     }
@@ -527,10 +719,10 @@ void Gem::dealWithGem()
             if (mp.x + i < kMatrixWidth)
             {
                 
-                if (_gemStoneMatrix[mp.x + i][mp.y] && _gemStoneMatrix[mp.x + i][mp.y]->getState() != -1 && _gemStoneMatrix[mp.x + i][mp.y]->getGemSkill() != SkillAround1 && _gemStoneMatrix[mp.x + i][mp.y]->getGemSkill() != SkillAround3 && _gemStoneMatrix[mp.x + i][mp.y]->getGemType() < dragontooth)
+                if (_gemStoneMatrix[mp.x + i][mp.y] && !_gemStoneMatrix[mp.x + i][mp.y]->getNextSkill()  && _gemStoneMatrix[mp.x + i][mp.y]->getState() != -1 && _gemStoneMatrix[mp.x + i][mp.y]->getGemSkill() != SkillAround1 && _gemStoneMatrix[mp.x + i][mp.y]->getGemSkill() != SkillAround3 && _gemStoneMatrix[mp.x + i][mp.y]->getGemType() < dragontooth)
                 {
                     _gemStoneMatrix[mp.x + i][mp.y]->setState(-1);
-                    if (_gemStoneMatrix[mp.x + i][mp.y]->getGemSkill() && !_gemStoneMatrix[mp.x + i][mp.y]->getSameAndSkill())
+                    if (_gemStoneMatrix[mp.x + i][mp.y]->getGemSkill() /*&& !_gemStoneMatrix[mp.x + i][mp.y]->getSameAndSkill()*/)
                     {
                         _gemStoneMatrix[mp.x + i][mp.y]->runAction(Sequence::create(DelayTime::create(time),CallFuncN::create(CC_CALLBACK_1(Gem::nextSkill, _gemStoneMatrix[mp.x + i][mp.y])), NULL));
                     }
@@ -542,14 +734,14 @@ void Gem::dealWithGem()
     
     if (_skill == SkillVerticl || _skill == SkillCross)
     {
-        for (int i = 0; i < kMatrixWidth; i++)
+        for (int i = 1; i < kMatrixWidth; i++)
         {
             if (mp.y - i >= 0)
             {
-                if (_gemStoneMatrix[mp.x][mp.y - i] && _gemStoneMatrix[mp.x][mp.y - i]->getState() != -1 && _gemStoneMatrix[mp.x][mp.y - i]->getGemSkill() != SkillAround1 && _gemStoneMatrix[mp.x][mp.y - i]->getGemSkill() != SkillAround3 && _gemStoneMatrix[mp.x][mp.y - i]->getGemType() < dragontooth)
+                if (_gemStoneMatrix[mp.x][mp.y - i] && !_gemStoneMatrix[mp.x][mp.y - i]->getNextSkill() && _gemStoneMatrix[mp.x][mp.y - i]->getState() != -1 && _gemStoneMatrix[mp.x][mp.y - i]->getGemSkill() != SkillAround1 && _gemStoneMatrix[mp.x][mp.y - i]->getGemSkill() != SkillAround3 && _gemStoneMatrix[mp.x][mp.y - i]->getGemType() < dragontooth)
                 {
                     _gemStoneMatrix[mp.x][mp.y - i]->setState(-1);
-                    if (_gemStoneMatrix[mp.x][mp.y - i]->getGemSkill() && !_gemStoneMatrix[mp.x][mp.y - i]->getSameAndSkill())
+                    if (_gemStoneMatrix[mp.x][mp.y - i]->getGemSkill() /*&& !_gemStoneMatrix[mp.x][mp.y - i]->getSameAndSkill()*/)
                     {
                         _gemStoneMatrix[mp.x][mp.y - i]->runAction(Sequence::create(DelayTime::create(time),CallFuncN::create(CC_CALLBACK_1(Gem::nextSkill, _gemStoneMatrix[mp.x][mp.y - i])), NULL));
                     }
@@ -559,11 +751,11 @@ void Gem::dealWithGem()
             if (mp.y + i < kMatrixWidth)
             {
                 
-                if (_gemStoneMatrix[mp.x][mp.y + i] && _gemStoneMatrix[mp.x][mp.y + i]->getState() != -1 && _gemStoneMatrix[mp.x][mp.y + i]->getGemSkill() != SkillAround1 && _gemStoneMatrix[mp.x][mp.y + i]->getGemSkill() != SkillAround3 && _gemStoneMatrix[mp.x][mp.y + i]->getGemType() < dragontooth)
+                if (_gemStoneMatrix[mp.x][mp.y + i] && !_gemStoneMatrix[mp.x][mp.y + i]->getNextSkill() && _gemStoneMatrix[mp.x][mp.y + i]->getState() != -1 && _gemStoneMatrix[mp.x][mp.y + i]->getGemSkill() != SkillAround1 && _gemStoneMatrix[mp.x][mp.y + i]->getGemSkill() != SkillAround3 && _gemStoneMatrix[mp.x][mp.y + i]->getGemType() < dragontooth)
                 {
                     _gemStoneMatrix[mp.x][mp.y + i]->setState(-1);
                     
-                    if (_gemStoneMatrix[mp.x][mp.y + i]->getGemSkill() && !_gemStoneMatrix[mp.x][mp.y + i]->getSameAndSkill())
+                    if (_gemStoneMatrix[mp.x][mp.y + i]->getGemSkill() /*&& !_gemStoneMatrix[mp.x][mp.y + i]->getSameAndSkill()*/)
                     {
                         _gemStoneMatrix[mp.x][mp.y + i]->runAction(Sequence::create(DelayTime::create(time),CallFuncN::create(CC_CALLBACK_1(Gem::nextSkill, _gemStoneMatrix[mp.x][mp.y + i])), NULL));
                     }
@@ -577,12 +769,12 @@ void Gem::dealWithGem()
         {
             for (int j=0;j<kMatrixWidth; j++)
             {
-                if ((i >= mp.x-1)&&(i <= mp.x+1)&&(j >= mp.y-1)&&(j <= mp.y+1)&&_gemStoneMatrix[i][j] && _gemStoneMatrix[i][j]->getState() != -1 && _gemStoneMatrix[i][j]->getGemSkill() != SkillAround1 && _gemStoneMatrix[i][j]->getGemSkill() != SkillAround3 && _gemStoneMatrix[i][j]->getGemType() < dragontooth)
+                if ((i >= mp.x-1)&&(i <= mp.x+1)&&(j >= mp.y-1)&&(j <= mp.y+1)&&_gemStoneMatrix[i][j] && !_gemStoneMatrix[i][j]->getNextSkill() && _gemStoneMatrix[i][j]->getState() != -1 && _gemStoneMatrix[i][j]->getGemSkill() != SkillAround1 && _gemStoneMatrix[i][j]->getGemSkill() != SkillAround3 && _gemStoneMatrix[i][j]->getGemType() < dragontooth)
                 {
                     
                     _gemStoneMatrix[i][j]->setState(-1);;
                     
-                    if (_gemStoneMatrix[i][j]->getGemSkill() && !_gemStoneMatrix[i][j]->getSameAndSkill())
+                    if (_gemStoneMatrix[i][j]->getGemSkill() /*&& !_gemStoneMatrix[i][j]->getSameAndSkill()*/)
                     {
                         _gemStoneMatrix[i][j]->runAction(Sequence::create(DelayTime::create(time),CallFuncN::create(CC_CALLBACK_1(Gem::nextSkill, _gemStoneMatrix[i][j])), NULL));
                     }
@@ -602,11 +794,11 @@ void Gem::dealWithGem()
         {
             for (int j=0;j<kMatrixWidth; j++)
             {
-                if (( ((i >= mp.x-1) && (i <= mp.x+1)) || ((j >= mp.y-1) && (j <= mp.y+1)) ) &&_gemStoneMatrix[i][j] && _gemStoneMatrix[i][j]->getState() != -1 && _gemStoneMatrix[i][j]->getGemSkill() != SkillAround1 && _gemStoneMatrix[i][j]->getGemSkill() != SkillAround3 && _gemStoneMatrix[i][j]->getGemType() < dragontooth)
+                if (( ((i >= mp.x-1) && (i <= mp.x+1)) || ((j >= mp.y-1) && (j <= mp.y+1)) ) &&_gemStoneMatrix[i][j] && !_gemStoneMatrix[i][j]->getNextSkill() && _gemStoneMatrix[i][j]->getState() != -1 && _gemStoneMatrix[i][j]->getGemSkill() != SkillAround1 && _gemStoneMatrix[i][j]->getGemSkill() != SkillAround3 && _gemStoneMatrix[i][j]->getGemType() < dragontooth)
                 {
                     _gemStoneMatrix[i][j]->setState(-1);;
                     
-                    if (_gemStoneMatrix[i][j]->getGemSkill() && !_gemStoneMatrix[i][j]->getSameAndSkill())
+                    if (_gemStoneMatrix[i][j]->getGemSkill() /*&& !_gemStoneMatrix[i][j]->getSameAndSkill()*/)
                     {
                         _gemStoneMatrix[i][j]->runAction(Sequence::create(DelayTime::create(time),CallFuncN::create(CC_CALLBACK_1(Gem::nextSkill, _gemStoneMatrix[i][j])), NULL));
                     }
@@ -621,11 +813,11 @@ void Gem::dealWithGem()
         {
             for (int j=0;j<kMatrixWidth; j++)
             {
-                if ((i >= mp.x-2)&&(i <= mp.x+2)&&(j >= mp.y-2)&&(j <= mp.y+2)&&_gemStoneMatrix[i][j] && _gemStoneMatrix[i][j]->getState() != -1 && _gemStoneMatrix[i][j]->getGemSkill() != SkillAround1 && _gemStoneMatrix[i][j]->getGemSkill() != SkillAround3 && _gemStoneMatrix[i][j]->getGemType() < dragontooth)
+                if ((i >= mp.x-2)&&(i <= mp.x+2)&&(j >= mp.y-2)&&(j <= mp.y+2)&& _gemStoneMatrix[i][j] && !_gemStoneMatrix[i][j]->getNextSkill() && _gemStoneMatrix[i][j]->getState() != -1 && _gemStoneMatrix[i][j]->getGemSkill() != SkillAround1 && _gemStoneMatrix[i][j]->getGemSkill() != SkillAround3 && _gemStoneMatrix[i][j]->getGemType() < dragontooth)
                 {
                     _gemStoneMatrix[i][j]->setState(-1);;
                     
-                    if (_gemStoneMatrix[i][j]->getGemSkill() && !_gemStoneMatrix[i][j]->getSameAndSkill())
+                    if (_gemStoneMatrix[i][j]->getGemSkill() /*&& !_gemStoneMatrix[i][j]->getSameAndSkill()*/)
                     {
                         _gemStoneMatrix[i][j]->runAction(Sequence::create(DelayTime::create(time),CallFuncN::create(CC_CALLBACK_1(Gem::nextSkill, _gemStoneMatrix[i][j])), NULL));
                     }
@@ -644,19 +836,21 @@ void Gem::dealWithGem()
 void Gem::nextSkill(Node *pSender)
 {
     Gem* gem = (Gem*)pSender;
-    gem->removeNoCollect(false);
+    gem->beforeExplode();
+
 }
 
 void Gem::addCollectGem()
 {
-    map<GemType, int> map_Target = _mapInfo->getMapTarget();
-    map<GemType, int>::iterator iter;
-    iter = map_Target.find(_type);
-    if (iter != map_Target.end())
-    {
-        __String *str = __String::createWithFormat("%d",_type);
+//    map<GemType, int> map_Target = _mapInfo->getMapTarget();
+//    map<GemType, int>::iterator iter;
+//    iter = map_Target.find(_type);
+//    if (iter != map_Target.end())
+//    {
+        int msg = 1000*_score + _type;
+        __String *str = __String::createWithFormat("%d",msg);
         NotificationCenter::getInstance()->postNotification(kMSG_ShowCollecte,str );
-    }
+//    }
 }
 
 void Gem::removeGem()
@@ -684,15 +878,23 @@ void Gem::removeGem()
 //    
 //    this->removeFromParentAndCleanup(true);
     
-    vector<Gem*> ::iterator result = find(_vecRemoveGem.begin(), _vecRemoveGem.end(), this);
-    if (result == _vecRemoveGem.end())
-    {
-        _vecRemoveGem.push_back(this);
-    }
+//    if(_type == all)
+//    {
+//        this->clearAllAction();
+//        this->removeFromParentAndCleanup(true);
+//    }
+//    else
+//    {
+        vector<Gem*> ::iterator result = find(_vecRemoveGem.begin(), _vecRemoveGem.end(), this);
+        if (result == _vecRemoveGem.end())
+        {
+            _vecRemoveGem.push_back(this);
+        }
+//    }
     
     if (count == 0 && _type != all)
     {
-        NotificationCenter::getInstance()->postNotification("after_match");
+        afterExplode();
         CCLOG("vecRemoveGem = %lu" ,_vecRemoveGem.size());
         for (int i = 0; i < _vecRemoveGem.size(); i++)
         {
@@ -705,6 +907,7 @@ void Gem::removeGem()
             
         }
         _vecRemoveGem.clear();
+        CCLOG("vecRemoveGem = %lu" ,_vecRemoveGem.size());
     }
 }
 
@@ -886,6 +1089,18 @@ void Gem::setGemType()
     }
 }
 
+void Gem::setNextSkill(GemSkill sk)
+{
+    if (_skill != SkillAround1 && _skill != SkillAround3)
+    {
+        _nextskill = sk;
+    }
+    else
+    {
+        _nextskill = SkillNull;
+    }
+}
+
 GemType Gem::getGemType()
 {
     return _type;
@@ -899,7 +1114,10 @@ GemSkill Gem::getGemSkill()
 void Gem::setGemSkill(GemSkill sk)
 {
     _skill = sk;
-    
+//    if (_nextskill )
+//    {
+//        _nextskill = SkillNull;
+//    }
     if (!_skill || _skill == SkillAround1)
     {
         _skillSprite->setVisible(false);
@@ -924,7 +1142,7 @@ void Gem::displaySkill(Node *pSender)
     
     auto animation = Animation::create();
     __String *str = __String::create("");
-    switch (_skill)
+    switch (_nextskill/*_skill*/)
     {
         case SkillHorizontal:
         case SkillVerticl:
@@ -960,7 +1178,7 @@ void Gem::displaySkill(Node *pSender)
             break;
     }
     
-    if (_skill == SkillAllSame)
+    if (/*_skill*/_nextskill == SkillAllSame)
     {
         _spr->setVisible(false);
         Armature *armature1 = Armature::create( "tongsexiao");
@@ -974,12 +1192,19 @@ void Gem::displaySkill(Node *pSender)
         _skillSprite->setVisible(true);
         _skillSprite->setTexture(str->getCString());
         _skillSprite->setRotation(0);
-        if (_skill == SkillVerticl)
+        if (_nextskill/*_skill*/ == SkillVerticl)
         {
             _skillSprite->setRotation(90);
         }
         _skillSprite->runAction(RepeatForever::create(action));
     }
+//    if (_skill == SkillNull)
+//    {
+//        _skill = _nextskill;
+//        _nextskill = SkillNull;
+//        
+//        setGemType();
+//    }
 }
 
 void Gem::sameDisplay(Node *pSender)
@@ -1000,7 +1225,7 @@ void Gem::setSkillSpr()
 
 void Gem::removeSkillSpr()
 {
-    if (_skillSprite)
+    if (_skillSprite && !_nextskill)
     {
         _skillSprite->setVisible(false);
     }
@@ -1411,7 +1636,7 @@ void Gem::swap(Direction direction, bool reverse,bool isSelected,CallFunc* callb
         if(isSelected)
         {
             
-            this->runAction(Sequence::create(swapAction,callbackAction,CallFuncN::create(CC_CALLBACK_1(GemAction::playEffectMusic,caller,"change.mp3")),NULL));
+            this->runAction(Sequence::create(swapAction  ,callbackAction,CallFuncN::create(CC_CALLBACK_1(GemAction::playEffectMusic,caller,"change.mp3")),NULL));
         }
         else
         {
@@ -1436,6 +1661,7 @@ void Gem::clearAllAction()
 //单个消除效果
 void Gem::explosionParticle()
 {
+    NotificationCenter::getInstance()->postNotification("display_score",this);
     __String *str = __String::create("red_suilie.plist");
     switch (_type)
     {
@@ -1490,15 +1716,76 @@ void Gem::explosionParticle()
         armature1->getAnimation()->playWithIndex(0);
         armature1->setPosition(this->getPosition());
         armature1->getAnimation()->setMovementEventCallFunc(CC_CALLBACK_1(Gem::removeSelf, this) );
+        
     }
     this->setZOrder(1);
     
     _spr->setVisible(false);
 }
 
+void Gem::aroundAnimation(Node *pSender)
+{
+    pSender->removeFromParentAndCleanup(true);
+    
+    MyPoint mp = getCurrentIndex(this->getPosition());
+    
+    if (_skill == SkillAround1 || _skill == SkillAround2)
+    {
+        for(int i=0;i<kMatrixWidth;i++)
+        {
+            for (int j=0;j<kMatrixWidth; j++)
+            {
+                if ((i >= mp.x-1)&&(i <= mp.x+1) && (j >= mp.y-1) && (j <= mp.y+1) && _gemStoneMatrix[i][j])
+                {
+                    if (i == mp.x && j == mp.y)
+                    {
+                        continue;
+                    }
+                    Armature *arm1 = Armature::create("jiugong04_effect");
+                    arm1->getAnimation()->playWithIndex(0);
+                    _particleNode->addChild(arm1);
+                    arm1->setPosition(_gemStoneMatrix[i][j]->getPosition());
+                    arm1->getAnimation()->setMovementEventCallFunc(CC_CALLBACK_1(Gem::showSkillAnimation, this));
+                }
+            }
+        }
+    }
+    if (_skill == SkillAround3 || _skill == SkillAround4)
+    {
+        for(int i=0;i<kMatrixWidth;i++)
+        {
+            for (int j=0;j<kMatrixWidth; j++)
+            {
+                if ((i >= mp.x-2)&&(i <= mp.x+2)&&(j >= mp.y-2)&&(j <= mp.y+2)&&_gemStoneMatrix[i][j])
+                {
+                    if (i == mp.x && j == mp.y)
+                    {
+                        continue;
+                    }
+                    Armature *arm1 = Armature::create("jiugong04_effect");
+                    arm1->getAnimation()->playWithIndex(0);
+                    _particleNode->addChild(arm1);
+                    arm1->setPosition(_gemStoneMatrix[i][j]->getPosition());
+                    arm1->getAnimation()->setMovementEventCallFunc(CC_CALLBACK_1(Gem::showSkillAnimation, this));
+                }
+            }
+        }
+    }
+    
+    Armature *arm1 = Armature::create("jiugong04_effect");
+    arm1->getAnimation()->playWithIndex(0);
+    _particleNode->addChild(arm1);
+    arm1->setPosition(_gemStoneMatrix[mp.x][mp.y]->getPosition());
+    arm1->getAnimation()->setMovementEventCallFunc(CC_CALLBACK_1(Gem::gemBright, this));
+}
+
 void Gem::gemBright(Node *pSender)
 {
     pSender->removeFromParentAndCleanup(true);
+//    if (_vecRemoveGem.size() == 0 && (_skill == SkillHorizontal || _skill == SkillVerticl))
+//    {
+//        return;
+//    }
     
     MyPoint mp = getCurrentIndex(this->getPosition());
     
@@ -1508,7 +1795,7 @@ void Gem::gemBright(Node *pSender)
         {
             if (mp.x - i >= 0)
             {
-                if (_gemStoneMatrix[mp.x - i][mp.y] && _gemStoneMatrix[mp.x - i][mp.y]->getState() == -1 && !_gemStoneMatrix[mp.x - i][mp.y]->getSameAndSkill())
+                if (_gemStoneMatrix[mp.x - i][mp.y] && _gemStoneMatrix[mp.x - i][mp.y]->getState() == -1 /* && !_gemStoneMatrix[mp.x - i][mp.y]->getSameAndSkill()*/)
                 {
                     _gemStoneMatrix[mp.x - i][mp.y]->runAction(Sequence::create(DelayTime::create(0),CallFuncN::create(CC_CALLBACK_1(Gem::gemBrightStar, _gemStoneMatrix[mp.x - i][mp.y])), NULL));
                 }
@@ -1516,7 +1803,7 @@ void Gem::gemBright(Node *pSender)
             
             if (mp.x + i < kMatrixWidth)
             {
-                if (_gemStoneMatrix[mp.x + i][mp.y] && _gemStoneMatrix[mp.x + i][mp.y]->getState() == -1 && !_gemStoneMatrix[mp.x + i][mp.y]->getSameAndSkill())
+                if (_gemStoneMatrix[mp.x + i][mp.y] && _gemStoneMatrix[mp.x + i][mp.y]->getState() == -1 /*&& !_gemStoneMatrix[mp.x + i][mp.y]->getSameAndSkill()*/)
                 {
                     _gemStoneMatrix[mp.x + i][mp.y]->runAction(Sequence::create(DelayTime::create(0),CallFuncN::create(CC_CALLBACK_1(Gem::gemBrightStar, _gemStoneMatrix[mp.x + i][mp.y])), NULL));
                 }
@@ -1531,7 +1818,7 @@ void Gem::gemBright(Node *pSender)
         {
             if (mp.y - i >= 0)
             {
-                if (_gemStoneMatrix[mp.x][mp.y - i] && _gemStoneMatrix[mp.x][mp.y - i]->getState() == -1 && !_gemStoneMatrix[mp.x][mp.y - i]->getSameAndSkill())
+                if (_gemStoneMatrix[mp.x][mp.y - i] && _gemStoneMatrix[mp.x][mp.y - i]->getState() == -1 /*&& !_gemStoneMatrix[mp.x][mp.y - i]->getSameAndSkill()*/)
                 {
                     _gemStoneMatrix[mp.x][mp.y - i]->runAction(Sequence::create(DelayTime::create(0),CallFuncN::create(CC_CALLBACK_1(Gem::gemBrightStar, _gemStoneMatrix[mp.x][mp.y - i])), NULL));
                 }
@@ -1540,7 +1827,7 @@ void Gem::gemBright(Node *pSender)
             if (mp.y + i < kMatrixWidth)
             {
                 
-                if (_gemStoneMatrix[mp.x][mp.y + i] && _gemStoneMatrix[mp.x][mp.y + i]->getState() == -1 && !_gemStoneMatrix[mp.x][mp.y + i]->getSameAndSkill())
+                if (_gemStoneMatrix[mp.x][mp.y + i] && _gemStoneMatrix[mp.x][mp.y + i]->getState() == -1 /*&& !_gemStoneMatrix[mp.x][mp.y + i]->getSameAndSkill()*/)
                 {
                     _gemStoneMatrix[mp.x][mp.y + i]->runAction(Sequence::create(DelayTime::create(0),CallFuncN::create(CC_CALLBACK_1(Gem::gemBrightStar, _gemStoneMatrix[mp.x][mp.y + i])), NULL));
                 }
@@ -1555,7 +1842,7 @@ void Gem::gemBright(Node *pSender)
         {
             for (int j=0;j<kMatrixWidth; j++)
             {
-                if (( ((i >= mp.x-1) && (i <= mp.x+1)) || ((j >= mp.y-1) && (j <= mp.y+1)) ) &&_gemStoneMatrix[i][j] && _gemStoneMatrix[i][j]->getState() == -1 && !_gemStoneMatrix[i][j]->getSameAndSkill())
+                if (( ((i >= mp.x-1) && (i <= mp.x+1)) || ((j >= mp.y-1) && (j <= mp.y+1)) ) &&_gemStoneMatrix[i][j] /*&& _gemStoneMatrix[i][j]->getState() == -1 && !_gemStoneMatrix[i][j]->getSameAndSkill()*/)
                 {
                    _gemStoneMatrix[i][j]->runAction(Sequence::create(DelayTime::create(0),CallFuncN::create(CC_CALLBACK_1(Gem::gemBrightStar, _gemStoneMatrix[i][j])), NULL));
                 }
@@ -1569,7 +1856,7 @@ void Gem::gemBright(Node *pSender)
         {
             for (int j=0;j<kMatrixWidth; j++)
             {
-                if ((i >= mp.x-1)&&(i <= mp.x+1)&&(j >= mp.y-1)&&(j <= mp.y+1)&&_gemStoneMatrix[i][j] && _gemStoneMatrix[i][j]->getState() == -1 && !_gemStoneMatrix[i][j]->getSameAndSkill())
+                if ((i >= mp.x-1)&&(i <= mp.x+1)&&(j >= mp.y-1)&&(j <= mp.y+1)&&_gemStoneMatrix[i][j] && _gemStoneMatrix[i][j]->getState() == -1 /*&& !_gemStoneMatrix[i][j]->getSameAndSkill()*/)
                 {
                     _gemStoneMatrix[i][j]->runAction(Sequence::create(DelayTime::create(0),CallFuncN::create(CC_CALLBACK_1(Gem::gemBrightStar, _gemStoneMatrix[i][j])), NULL));
                 }
@@ -1589,7 +1876,7 @@ void Gem::gemBright(Node *pSender)
         {
             for (int j=0;j<kMatrixWidth; j++)
             {
-                if ((i >= mp.x-2)&&(i <= mp.x+2)&&(j >= mp.y-2)&&(j <= mp.y+2)&&_gemStoneMatrix[i][j] && _gemStoneMatrix[i][j]->getState() == -1 && !_gemStoneMatrix[i][j]->getSameAndSkill())
+                if ((i >= mp.x-2)&&(i <= mp.x+2)&&(j >= mp.y-2)&&(j <= mp.y+2)&&_gemStoneMatrix[i][j] && _gemStoneMatrix[i][j]->getState() == -1 /*&& !_gemStoneMatrix[i][j]->getSameAndSkill()*/)
                 {
                     _gemStoneMatrix[i][j]->runAction(Sequence::create(DelayTime::create(0),CallFuncN::create(CC_CALLBACK_1(Gem::gemBrightStar, _gemStoneMatrix[i][j])), NULL));
                 }
@@ -1603,13 +1890,13 @@ void Gem::gemBright(Node *pSender)
         }
     }
     
-    if (_skill != SkillAround1 && _nextskill)
-    {
-        _skill = _nextskill;
-        _nextskill = SkillNull;
-        setSkillSpr();
-        setGemType();
-    }
+//    if (_skill != SkillAround1 && _nextskill)
+//    {
+//        _skill = _nextskill;
+//        _nextskill = SkillNull;
+////        setSkillSpr();
+//        setGemType();
+//    }
 }
 
 void Gem::gemBrightStar(Node *pSender)
@@ -1622,10 +1909,15 @@ void Gem::gemBrightStar(Node *pSender)
 //    }
 //    else
 //    {
+    if (gem->getGemType() < all)
+    {
         Armature *arm = Armature::create(brightName(gem));
         arm->getAnimation()->playWithIndex(0);
         gem->addChild(arm);
         arm->getAnimation()->setMovementEventCallFunc(CC_CALLBACK_1(Gem::gemBrightOver, gem,gem));
+    }
+    
+        
 //    }
 }
 
@@ -1685,6 +1977,8 @@ void Gem::gemBrightOver(Node *pSender,Gem *gem)
 
     
     gem->removeNoCollect(false);  //依次 消除
+    
+    matchAll();  // 要解决 
 }
 
 void Gem::removeSelf(Node *pSender)
@@ -1700,15 +1994,26 @@ void Gem::removeSameGem(Node *pSender ,GemType type)
         {
             if(_gemStoneMatrix[i][j]&&_gemStoneMatrix[i][j]->getState() == -1 && _gemStoneMatrix[i][j]->getGemType() == type)
             {
-                _gemStoneMatrix[i][j]->removeNoCollect(false);
+                _gemStoneMatrix[i][j]->beforeExplode();
             }
         }
     }
 }
 
+void Gem::afterExplode()
+{
+    NotificationCenter::getInstance()->postNotification("after_match");
+}
+
+void Gem::sameSkillOver()
+{
+    this->runAction(Sequence::create(DelayTime::create(1.5),CallFunc::create(CC_CALLBACK_0(Gem::afterExplode, this)), NULL));
+}
+
 void Gem::removeSameSkill()
 {
-    removeNoCollect(false);
+
+    beforeExplode();
 }
 
 void Gem::fiveMatchEffect(Node* sender)
@@ -1724,7 +2029,7 @@ void Gem::fiveMatchEffect(Node* sender)
     {
         _state = -1;
     }
-    if (_skill)
+    if (_nextskill)
     {
         if (_type == all)
         {
@@ -1830,7 +2135,7 @@ void Gem::breakIceFloor(int i, int j)
 
 bool Gem::equal(Gem *gem)
 {
-    return (gem!=NULL&&_type==gem->getGemType());
+    return (gem!=NULL&&_type==gem->getGemType() && _type < all);
 }
 
 //设置生病和病好，生成动画加入队列
@@ -2061,38 +2366,38 @@ void Gem::explode(MyPoint &myPoint,MyPoint &distPoint,int count,int index)
     //冰冻或者束缚
     if(_frozen>0||_restrain>0||_roots>0||_chain>0)
     {
-        if(_frozen>0)
-        {
-            AnimationWraper aw(this,e_aid_normal_frozenoff,e_priority_normal_frozenoff);
-            
-            _animationWraperVector->push_back(aw);
-            
-            _frozen--;
-        }
-        else if(_restrain>0)
-        {
-            AnimationWraper aw(this,e_aid_normal_restrainoff,e_priority_normal_restrainoff);
-            
-            _animationWraperVector->push_back(aw);
-            
-            _restrain--;
-        }
-        else if(_roots>0)
-        {
-            AnimationWraper aw(this,e_aid_normal_rootsoff,e_priority_normal_rootsoff);
-            
-            _animationWraperVector->push_back(aw);
-            
-            _roots--;
-        }
-        else if(_chain>0)
-        {
-            AnimationWraper aw(this,e_aid_normal_chainoff,e_priority_normal_chainoff);
-            
-            _animationWraperVector->push_back(aw);
-            
-            _chain--;
-        }
+//        if(_frozen>0)
+//        {
+//            AnimationWraper aw(this,e_aid_normal_frozenoff,e_priority_normal_frozenoff);
+//            
+//            _animationWraperVector->push_back(aw);
+//            
+//            _frozen--;
+//        }
+//        else if(_restrain>0)
+//        {
+//            AnimationWraper aw(this,e_aid_normal_restrainoff,e_priority_normal_restrainoff);
+//            
+//            _animationWraperVector->push_back(aw);
+//            
+//            _restrain--;
+//        }
+//        else if(_roots>0)
+//        {
+//            AnimationWraper aw(this,e_aid_normal_rootsoff,e_priority_normal_rootsoff);
+//            
+//            _animationWraperVector->push_back(aw);
+//            
+//            _roots--;
+//        }
+//        else if(_chain>0)
+//        {
+//            AnimationWraper aw(this,e_aid_normal_chainoff,e_priority_normal_chainoff);
+//            
+//            _animationWraperVector->push_back(aw);
+//            
+//            _chain--;
+//        }
         return;
     }
     
@@ -2319,44 +2624,44 @@ void Gem::showSkillAnimation(Node *pSender)
 {
     pSender->removeFromParentAndCleanup(true);
     
-    for(int i=0;i<kMatrixWidth;i++)
-    {
-        for (int j=0;j<kMatrixWidth; j++)
-        {
-            if (_gemStoneMatrix[i][j] && _gemStoneMatrix[i][j]->getSkillAnimation() && _gemStoneMatrix[i][j]->canMove() && _gemStoneMatrix[i][j]->getGemType() < all)
-            {
-                __String *str = __String::create("");
-                switch (_gemStoneMatrix[i][j]->getGemType())
-                {
-                    case red:
-                        str = __String::create("red_liang");
-                        break;
-                    case blue:
-                        str = __String::create("blue_liang");
-                        break;
-                    case green:
-                        str = __String::create("green_liang");
-                        break;
-                    case purple:
-                        str = __String::create("purple_liang");
-                        break;
-                    case white:
-                        str = __String::create("white_liang");
-                        break;
-                    case yellow:
-                        str = __String::create("yellow_liang");
-                        break;
-                    default:
-                        break;
-                }
-                Armature *arm = Armature::create(str->getCString());
-                arm->getAnimation()->playWithIndex(0);
-                _gemStoneMatrix[i][j]->addChild(arm);
-                _gemStoneMatrix[i][j]->setSkillAnimation(false);
-//                arm->getAnimation()->setMovementEventCallFunc(CC_CALLBACK_1(Gem::removeSelf, this));
-            }
-        }
-    }
+//    for(int i=0;i<kMatrixWidth;i++)
+//    {
+//        for (int j=0;j<kMatrixWidth; j++)
+//        {
+//            if (_gemStoneMatrix[i][j] && _gemStoneMatrix[i][j]->getSkillAnimation() && _gemStoneMatrix[i][j]->canMove() && _gemStoneMatrix[i][j]->getGemType() < all)
+//            {
+//                __String *str = __String::create("");
+//                switch (_gemStoneMatrix[i][j]->getGemType())
+//                {
+//                    case red:
+//                        str = __String::create("red_liang");
+//                        break;
+//                    case blue:
+//                        str = __String::create("blue_liang");
+//                        break;
+//                    case green:
+//                        str = __String::create("green_liang");
+//                        break;
+//                    case purple:
+//                        str = __String::create("purple_liang");
+//                        break;
+//                    case white:
+//                        str = __String::create("white_liang");
+//                        break;
+//                    case yellow:
+//                        str = __String::create("yellow_liang");
+//                        break;
+//                    default:
+//                        break;
+//                }
+//                Armature *arm = Armature::create(str->getCString());
+//                arm->getAnimation()->playWithIndex(0);
+//                _gemStoneMatrix[i][j]->addChild(arm);
+//                _gemStoneMatrix[i][j]->setSkillAnimation(false);
+////                arm->getAnimation()->setMovementEventCallFunc(CC_CALLBACK_1(Gem::removeSelf, this));
+//            }
+//        }
+//    }
 }
 
 void Gem::showSkAnimaByID()

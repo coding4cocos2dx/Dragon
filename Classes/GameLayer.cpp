@@ -438,7 +438,7 @@ bool GameLayer::init()
     this->setTouchDisable();
     
 
-    this->runAction(Sequence::create(DelayTime::create(kGameLayerFlyTime),CallFunc::create(CC_CALLBACK_0(GameLayer::appear, this)),CallFunc::create(CC_CALLBACK_0(GameLayer::shining, this)),NULL));
+    this->runAction(Sequence::create(DelayTime::create(kGameLayerFlyTime),/*CallFunc::create(CC_CALLBACK_0(GameLayer::appear, this)),CallFunc::create(CC_CALLBACK_0(GameLayer::shining, this)),*/NULL));
     
     _listener_touch = EventListenerTouchOneByOne::create();
     _listener_touch->onTouchBegan = CC_CALLBACK_2(GameLayer::onTouchBegan,this);
@@ -468,7 +468,9 @@ void GameLayer::onEnter()
     
     NotificationCenter::getInstance()->addObserver(this, callfuncO_selector(GameLayer::buyFiveSteps),kMSG_BuyFiveSteps, NULL);
     
-    NotificationCenter::getInstance()->addObserver(this, callfuncO_selector(GameLayer::afterMatch), "after_match", NULL);
+    NotificationCenter::getInstance()->addObserver(this, callfuncO_selector(GameLayer::afterExplode), "after_match", NULL);
+    
+    NotificationCenter::getInstance()->addObserver(this, callfuncO_selector(GameLayer::displayScore), "display_score", NULL);
 }
 
 void GameLayer::onExit()
@@ -481,6 +483,7 @@ void GameLayer::onExit()
     NotificationCenter::getInstance()->removeObserver(this, kMSG_GemFallDown);
     NotificationCenter::getInstance()->removeObserver(this, kMSG_BuyFiveSteps);
     NotificationCenter::getInstance()->removeObserver(this, "after_match");
+    NotificationCenter::getInstance()->removeObserver(this, "display_score");
     _eventDispatcher->removeEventListenersForTarget(this);
     
     Layer::onExit();
@@ -536,7 +539,7 @@ bool GameLayer::onTouchBegan(Touch *pTouch, Event *pEvent)
         return false;
     }
     
-    if((b<0||a<0) && _propkind == PropNone)
+    if(/*(b<0||a<0) && */_propkind == PropNone)
     {
         __String *str = __String::create("");
         if (_hammerSprite->getBoundingBox().containsPoint(Vec2(a, b)))
@@ -597,7 +600,7 @@ bool GameLayer::onTouchBegan(Touch *pTouch, Event *pEvent)
             }
             return true;
         }
-        return false;
+//        return false;
     }
     
     MyPoint mp = MyPoint(-1, -1);
@@ -1283,9 +1286,12 @@ void GameLayer::appear()
             if (_gemMatrix[i][j])
             {
                 _gemMatrix[i][j]->setVisible(true);
+                _gemMatrix[i][j]->setScale(0);
+                _gemMatrix[i][j]->runAction(ScaleTo::create(0.3, 1));
             }
         }
     }
+    this->runAction(Sequence::create(DelayTime::create(0.4) , CallFunc::create(CC_CALLBACK_0(GameLayer::shining, this)), NULL));
 }
 
 void GameLayer::highLightGem(float dt)
@@ -1572,18 +1578,18 @@ void GameLayer::flyToSame(MyPoint allPos , MyPoint samePos ,GemSkill skill)
                             int random = arc4random();
                             if (random%2 == 0)
                             {
-                                _gemMatrix[i][j]->setGemSkill(SkillHorizontal);
+                                _gemMatrix[i][j]->setNextSkill(SkillHorizontal);
                             }
                             else
                             {
-                                _gemMatrix[i][j]->setGemSkill(SkillVerticl);
+                                _gemMatrix[i][j]->setNextSkill(SkillVerticl);
                             }
                             _gemMatrix[i][j]->setSameAndSkill(true);
                         }
                             break;
                         case SkillAround2:
                         {
-                            _gemMatrix[i][j]->setGemSkill(SkillAround2);
+                            _gemMatrix[i][j]->setNextSkill(SkillAround2);
                             _gemMatrix[i][j]->setSameAndSkill(true);
                         }
                             break;
@@ -1611,7 +1617,7 @@ void GameLayer::flyToSame(MyPoint allPos , MyPoint samePos ,GemSkill skill)
             ActionInstant * callback;
             if (skill)
             {
-                callback = CallFunc::create(CC_CALLBACK_0(GameLayer::beforeMatch, this));;
+                callback = CallFunc::create(CC_CALLBACK_0(Gem::sameSkillOver, distGem));
             }
             else
             {
@@ -2178,7 +2184,7 @@ void GameLayer::magicAnimation(Node* pSender)
         _skillType = SkillNull;
         int random = arc4random()%100;
         
-        if (random < 30)//15
+        if (random < 15)//15
         {
             _skillType = SkillAllSame;
         }
@@ -2200,9 +2206,12 @@ void GameLayer::magicAnimation(Node* pSender)
         }
     
         pSender->removeFromParentAndCleanup(true);
-        _gemMatrix[_propPosition.x][_propPosition.y]->setGemSkill(_skillType);
+        _gemMatrix[_propPosition.x][_propPosition.y]->setNextSkill(_skillType);
         _gemMatrix[_propPosition.x][_propPosition.y]->setSkillSpr();
+        
+        _gemMatrix[_propPosition.x][_propPosition.y]->setGemSkill(_skillType);
         _gemMatrix[_propPosition.x][_propPosition.y]->setGemType();
+        
         _mapLayer->findPotential();
     }
     
@@ -2313,13 +2322,17 @@ void GameLayer::hammerAnimation()
     if(_gemMatrix[_propPosition.x][_propPosition.y]->getGemKind()==NormalGem)
     {
         _gemMatrix[_propPosition.x][_propPosition.y]->setState(-1);
-        _gemMatrix[_propPosition.x][_propPosition.y]->removeNoCollect(false);
+        _gemMatrix[_propPosition.x][_propPosition.y]->beforeExplode();
         GemAction::getInstance().playEffectMusic(NULL,"bigboom.mp3");
+        
+        this->runAction(Sequence::create(MoveBy::create(0.05, Vec2(0, 5)),MoveBy::create(0.05, Vec2(0, -5)), MoveBy::create(0.05, Vec2(0, 5)),MoveBy::create(0.05, Vec2(0, -5)),MoveBy::create(0.05, Vec2(0, 5)),MoveBy::create(0.05, Vec2(0, -5)),NULL));
     }
     else if(_gemMatrix[_propPosition.x][_propPosition.y]->getGemType()>=ice && _gemMatrix[_propPosition.x][_propPosition.y]->getGemType()<=stormwind)
     {
         _gemMatrix[_propPosition.x][_propPosition.y]->affected(1);
         GemAction::getInstance().playEffectMusic(NULL,"bigboom.mp3");
+        
+        this->runAction(Sequence::create(MoveBy::create(0.05, Vec2(0, 5)),MoveBy::create(0.05, Vec2(0, -5)), MoveBy::create(0.05, Vec2(0, 5)),MoveBy::create(0.05, Vec2(0, -5)),MoveBy::create(0.05, Vec2(0, 5)),MoveBy::create(0.05, Vec2(0, -5)),NULL));
     }
     else if(_gemMatrix[_propPosition.x][_propPosition.y]->getGemType()>=dragontooth && _gemMatrix[_propPosition.x][_propPosition.y]->getGemType()<=pumpkin)
     {
@@ -2345,7 +2358,7 @@ void GameLayer::crossAnimation()
         if (_gemMatrix[i][_propPosition.y])
         {
             _gemMatrix[i][_propPosition.y]->setState(-1);
-            _gemMatrix[i][_propPosition.y]->removeNoCollect(false);
+            _gemMatrix[i][_propPosition.y]->beforeExplode();
         }
     }
     
@@ -2358,13 +2371,13 @@ void GameLayer::crossAnimation()
         if (_gemMatrix[_propPosition.x][j])
         {
             _gemMatrix[_propPosition.x][j]->setState(-1);
-            _gemMatrix[_propPosition.x][j]->removeNoCollect(false);
+            _gemMatrix[_propPosition.x][j]->beforeExplode();
         }
     }
     
     
     _gemMatrix[_propPosition.x][_propPosition.y]->setState(-1);
-    _gemMatrix[_propPosition.x][_propPosition.y]->removeNoCollect(false);
+    _gemMatrix[_propPosition.x][_propPosition.y]->beforeExplode();
     
     _propkind = PropNone;
     _crossSprite->setOpacity(255);
@@ -2395,17 +2408,17 @@ void GameLayer::aroundAnimation(Node* pSender)
         if (j + 1 < kMatrixWidth && _gemMatrix[i-1][j+1])
         {
             _gemMatrix[i-1][j+1]->setState(-1);
-            _gemMatrix[i-1][j+1]->removeNoCollect(false);
+            _gemMatrix[i-1][j+1]->beforeExplode();
         }
         if (_gemMatrix[i-1][j])
         {
             _gemMatrix[i-1][j]->setState(-1);
-            _gemMatrix[i-1][j]->removeNoCollect(false);
+            _gemMatrix[i-1][j]->beforeExplode();
         }
         if (j - 1 >= 0 && _gemMatrix[i-1][j-1])
         {
             _gemMatrix[i-1][j-1]->setState(-1);
-            _gemMatrix[i-1][j-1]->removeNoCollect(false);
+            _gemMatrix[i-1][j-1]->beforeExplode();
         }
     }
     if (i + 1 < kMatrixWidth)
@@ -2413,52 +2426,52 @@ void GameLayer::aroundAnimation(Node* pSender)
         if (j + 1 < kMatrixWidth && _gemMatrix[i+1][j+1])
         {
             _gemMatrix[i+1][j+1]->setState(-1);
-            _gemMatrix[i+1][j+1]->removeNoCollect(false);
+            _gemMatrix[i+1][j+1]->beforeExplode();
         }
         if (_gemMatrix[i+1][j])
         {
             _gemMatrix[i+1][j]->setState(-1);
-            _gemMatrix[i+1][j]->removeNoCollect(false);
+            _gemMatrix[i+1][j]->beforeExplode();
         }
         if (j - 1 >= 0 && _gemMatrix[i+1][j-1])
         {
             _gemMatrix[i+1][j-1]->setState(-1);
-            _gemMatrix[i+1][j-1]->removeNoCollect(false);
+            _gemMatrix[i+1][j-1]->beforeExplode();
         }
     }
     if (j - 1 >=0 && _gemMatrix[i][j-1])
     {
         _gemMatrix[i][j-1]->setState(-1);
-        _gemMatrix[i][j-1]->removeNoCollect(false);
+        _gemMatrix[i][j-1]->beforeExplode();
     }
     if (j + 1 < kMatrixWidth && _gemMatrix[i][j+1])
     {
         _gemMatrix[i][j+1]->setState(-1);
-        _gemMatrix[i][j+1]->removeNoCollect(false);
+        _gemMatrix[i][j+1]->beforeExplode();
     }
     if (i-2 >= 0 && _gemMatrix[i-2][j])
     {
         _gemMatrix[i-2][j]->setState(-1);
-        _gemMatrix[i-2][j]->removeNoCollect(false);
+        _gemMatrix[i-2][j]->beforeExplode();
     }
     if (i+2 < kMatrixWidth && _gemMatrix[i+2][j])
     {
         _gemMatrix[i+2][j]->setState(-1);
-        _gemMatrix[i+2][j]->removeNoCollect(false);
+        _gemMatrix[i+2][j]->beforeExplode();
     }
     if (j-2 >= 0 && _gemMatrix[i][j-2])
     {
         _gemMatrix[i][j-2]->setState(-1);
-        _gemMatrix[i][j-2]->removeNoCollect(false);
+        _gemMatrix[i][j-2]->beforeExplode();
     }
     if (j+2 < kMatrixWidth && _gemMatrix[i][j+2])
     {
         _gemMatrix[i][j+2]->setState(-1);
-        _gemMatrix[i][j+2]->removeNoCollect(false);
+        _gemMatrix[i][j+2]->beforeExplode();
     }
     
     _gemMatrix[i][j]->setState(-1);
-    _gemMatrix[i][j]->removeNoCollect(false);
+    _gemMatrix[i][j]->beforeExplode();
     
     
 //    if(_gemMatrix[i][j]->getState()!=-1)
@@ -2589,9 +2602,10 @@ bool GameLayer::sameGemVector()
     {
         for(int i = 0;i<kMatrixWidth;i++)
         {
-            if(_gemMatrix[i][j] && _gemMatrix[i][j]->getSameAndSkill())
+            if(_gemMatrix[i][j] && _gemMatrix[i][j]->getSameAndSkill() && _gemMatrix[i][j]->getState() != -1)
             {
-                    _gemMatrix[i][j]->runAction(Sequence::create(DelayTime::create(2 + 0.2 * times),CallFunc::create(CC_CALLBACK_0(Gem::removeSameSkill, _gemMatrix[i][j])), NULL));
+                _gemMatrix[i][j]->setState(-1);
+                _gemMatrix[i][j]->runAction(Sequence::create(DelayTime::create(0.3 + 0.2 * times),CallFunc::create(CC_CALLBACK_0(Gem::removeSameSkill, _gemMatrix[i][j])), NULL));
                     times ++;
             }
         }
@@ -2614,7 +2628,7 @@ bool GameLayer::autoSkill()
             if(_gemMatrix[i][j]&&(_gemMatrix[i][j]->getGemSkill() == SkillAround1 || _gemMatrix[i][j]->getGemSkill() == SkillAround3))
             {
                 _gemMatrix[i][j]->setState(-1);
-                _gemMatrix[i][j]->removeNoCollect(false);
+                _gemMatrix[i][j]->beforeExplode();
                 resule = true;
 //                return true;   //一个个 爆炸
             }
@@ -2626,6 +2640,20 @@ bool GameLayer::autoSkill()
 //移动之后，和填空之后，均会执行beforematch函数
 void GameLayer::beforeMatch()
 {
+    for(int i=0;i<kMatrixWidth;i++)
+    {
+        for(int j=0;j<kMatrixWidth;j++)
+        {
+            if(_gemMatrix[i][j]&& _gemMatrix[i][j]->getNextSkill() && _gemMatrix[i][j]->getGemSkill() != SkillAround1 && _gemMatrix[i][j]->getGemSkill() != SkillAround3)
+            {
+                _gemMatrix[i][j]->setGemSkill(_gemMatrix[i][j]->getNextSkill());
+                _gemMatrix[i][j]->setNextSkill(SkillNull);
+                _gemMatrix[i][j]->setGemType();
+            }
+        }
+    }
+
+    
     _mapLayer->findConnection();
     
     
@@ -2644,7 +2672,6 @@ void GameLayer::beforeMatch()
     
     if(_mapLayer->connectionAreaVector.empty())
     {
-        _mapLayer->growOnFertile();
         if (autoSkill())
         {
             return;
@@ -2653,6 +2680,9 @@ void GameLayer::beforeMatch()
         {
             return;
         }
+        
+        afterMatch();
+        return;
     }
     else
     {
@@ -2664,62 +2694,14 @@ void GameLayer::beforeMatch()
         {
             _mapLayer->renewGemCount();
         }
-        _mapLayer->matchAllGem(&_animationWraperVector,_continueMatchTimes);
+//        _mapLayer->matchAllGem(&_animationWraperVector,_continueMatchTimes);
         
         _mapLayer->afterMatch();
         
         playContinueMatchMusic(_continueMatchTimes);
-    }
-    
-    _mapLayer->beforeMatchGem();
-    
-    //执行动画
-//    runAllAnimationAndAction(NULL, (AnimationPriority)1);
-    if(_mapLayer->connectionAreaVector.empty())
-    {
-        afterMatch();
-        return;
-    }
-    else
-    {
-        vector<ConnectionArea>::iterator it;
         
-        int i,j;
-        
-        //执行所有相连元素的explode函数，其内部会调用周围元素的影响函数affect
-        for( it =_mapLayer->connectionAreaVector.begin();it!=_mapLayer->connectionAreaVector.end();it++)
-        {
-            j = it->startPoint.y;
-            i = it->startPoint.x;
-            
-            if (it->direction == Up)
-            {
-                for ( ;j < it->startPoint.y + it->count; j++)
-                {
-                    _gemMatrix[i][j]->removeNoCollect(false);
-                }
-                
-            }
-            else
-            {
-                for (; i < it->startPoint.x + it->count; i++)
-                {
-                    if (it->isInCross)
-                    {
-                        MyPoint mp = MyPoint(i, j);
-                        if (mp.equal(it->centerPoint))
-                        {
-                            continue;
-                        }
-                    }
-                    _gemMatrix[i][j]->removeNoCollect(false);
-                    
-                }
-            }
-        }
+        dealGemBeforeExplode();
     }
-
-//    setTouchEnable();
 }
 void GameLayer::afterMatch()
 {
@@ -2794,7 +2776,7 @@ void GameLayer::afterMatch()
             return;
         }
         
-        if(_continueMatchTimes>=kMatch_great_level&&_propkind==PropNone/*&&!_mapInfo->getHeroMode()*/)
+        if(_continueMatchTimes>=kMatch_great_level&&_propkind==PropNone&&!DataCenter::getInstance()->getWinnerMode()/*&&!_mapInfo->getHeroMode()*/)
         {
             CCLOG("%d",_continueMatchTimes);
             if(_continueMatchTimes>=kMatch_awesome_level)
@@ -2892,6 +2874,196 @@ void GameLayer::afterMatch()
     // 	{
     // 		CCNotificationCenter::getInstance()->postNotification(kMSG_UpdateStars);
     // 	}
+}
+
+void GameLayer::dealGemBeforeExplode()
+{
+    vector<ConnectionArea>::iterator it;
+    
+    int i,j;
+    
+    bool createSkill = false;
+    bool triggerSkill = false;
+    
+    
+    
+    for( it = _mapLayer->connectionAreaVector.begin();it!=_mapLayer->connectionAreaVector.end();it++)
+    {
+        j = it->startPoint.y;
+        i = it->startPoint.x;
+        
+        if (it->direction == Up)
+        {
+            for ( ;j < it->startPoint.y + it->count; j++)
+            {
+                MyPoint point(i,j);
+                
+                _gemMatrix[i][j]->explode(point,it->centerPoint,it->count-2,
+                                          it->startPoint.y+it->count-j);
+                
+                _gemMatrix[i][j]->setScore(_continueMatchTimes);
+                
+                if (_gemMatrix[i][j]->getGemSkill())
+                {
+                    triggerSkill = true;
+                }
+            }
+            
+        }
+        else
+        {
+            for (; i < it->startPoint.x + it->count; i++)
+            {
+                MyPoint point(i,j);
+                
+                _gemMatrix[i][j]->explode(point,it->centerPoint,it->count-2,
+                                          it->startPoint.x+it->count-i);
+                
+                _gemMatrix[i][j]->setScore(_continueMatchTimes);
+                
+                if (_gemMatrix[i][j]->getGemSkill())
+                {
+                    triggerSkill = true;
+                }
+            }
+        }
+        
+        MyPoint temp;
+        
+        if (it->direction == Up)
+        {
+            if (it->centerPoint.y + 1 < it->startPoint.y + it->count)
+            {
+                temp = MyPoint(it->centerPoint.x, it->centerPoint.y + 1);
+            }
+            else
+            {
+                temp = MyPoint(it->centerPoint.x, it->centerPoint.y - 1);
+            }
+        }
+        else
+        {
+            if (it->centerPoint.x + 1 < it->startPoint.x + it->count)
+            {
+                temp = MyPoint(it->centerPoint.x + 1, it->centerPoint.y);
+            }
+            else
+            {
+                temp = MyPoint(it->centerPoint.x - 1, it->centerPoint.y);
+            }
+        }
+
+        
+        if (it->count >= 5)
+        {
+            createSkill = true;
+            if (_gemMatrix[it->centerPoint.x][it->centerPoint.y]->getGemSkill() != SkillAround2)
+            {
+                temp = it->centerPoint;
+            }
+            _gemMatrix[temp.x][temp.y]->setState(0);
+            _gemMatrix[temp.x][temp.y]->setNextSkill(SkillAllSame);
+//            _gemMatrix[temp.x][temp.y]->setGemType();
+        }
+        else if(it->isInCross)
+        {
+            createSkill = true;
+            if (_gemMatrix[it->centerPoint.x][it->centerPoint.y]->getGemSkill() != SkillAround2)
+            {
+                temp = it->centerPoint;
+            }
+            else
+            {
+                if (it->centerPoint.y + 1 < kMatrixWidth && _gemMatrix[it->centerPoint.x][it->centerPoint.y + 1] && _gemMatrix[it->centerPoint.x][it->centerPoint.y]->getGemType() == _gemMatrix[it->centerPoint.x][it->centerPoint.y + 1]->getGemType())
+                {
+                        temp = MyPoint(it->centerPoint.x, it->centerPoint.y + 1);
+                }
+                else if(it->centerPoint.y - 1 >= 0 && _gemMatrix[it->centerPoint.x][it->centerPoint.y - 1] && _gemMatrix[it->centerPoint.x][it->centerPoint.y]->getGemType() == _gemMatrix[it->centerPoint.x][it->centerPoint.y - 1]->getGemType())
+                {
+                        temp = MyPoint(it->centerPoint.x, it->centerPoint.y - 1);
+                }
+                else if(it->centerPoint.x + 1 < kMatrixWidth && _gemMatrix[it->centerPoint.x + 1][it->centerPoint.y] && _gemMatrix[it->centerPoint.x][it->centerPoint.y]->getGemType() == _gemMatrix[it->centerPoint.x + 1][it->centerPoint.y]->getGemType())
+                {
+                    temp = MyPoint(it->centerPoint.x + 1, it->centerPoint.y);
+                }
+                else if(it->centerPoint.x - 1 >= 0 && _gemMatrix[it->centerPoint.x - 1][it->centerPoint.y] && _gemMatrix[it->centerPoint.x][it->centerPoint.y]->getGemType() == _gemMatrix[it->centerPoint.x - 1][it->centerPoint.y]->getGemType())
+                {
+                    temp = MyPoint(it->centerPoint.x - 1, it->centerPoint.y);
+                }
+            }
+            _gemMatrix[temp.x][temp.y]->setState(0);
+            _gemMatrix[temp.x][temp.y]->setNextSkill(SkillAround2);
+        }
+        else if(it->count == 4)
+        {
+            createSkill = true;
+            
+            if (_gemMatrix[it->centerPoint.x][it->centerPoint.y]->getGemSkill() != SkillAround2)
+            {
+                temp = it->centerPoint;
+            }
+            
+            _gemMatrix[temp.x][temp.y]->setState(0);
+            if (it->direction == Up)
+            {
+                _gemMatrix[temp.x][temp.y]->setNextSkill(SkillHorizontal);
+            }
+            else
+            {
+                _gemMatrix[temp.x][temp.y]->setNextSkill(SkillVerticl);
+            }
+        }
+    }
+
+    if (createSkill)
+    {
+        it =_mapLayer->connectionAreaVector.begin();
+        j = it->startPoint.y;
+        i = it->startPoint.x;
+        _gemMatrix[i][j]->createSkill();
+    }
+    else if (triggerSkill)
+    {
+        it =_mapLayer->connectionAreaVector.begin();
+        j = it->startPoint.y;
+        i = it->startPoint.x;
+        _gemMatrix[i][j]->triggerSkill();
+    }
+    else
+    {
+        for( it =_mapLayer->connectionAreaVector.begin();it!=_mapLayer->connectionAreaVector.end();it++)
+        {
+            j = it->startPoint.y;
+            i = it->startPoint.x;
+            
+            if (it->direction == Up)
+            {
+                for ( ;j < it->startPoint.y + it->count; j++)
+                {
+                    _gemMatrix[i][j]->removeNoCollect(false);
+                }
+                
+            }
+            else
+            {
+                for (; i < it->startPoint.x + it->count; i++)
+                {
+                    if (it->isInCross)
+                    {
+                        MyPoint mp = MyPoint(i, j);
+                        if (mp.equal(it->centerPoint))
+                        {
+                            continue;
+                        }
+                    }
+                    _gemMatrix[i][j]->removeNoCollect(false);
+                    
+                }
+            }
+        }
+
+    }
+    
 }
 
 void GameLayer::runOneKindofAnimation(AnimationWraper aw,CallFuncN* callback)
@@ -3183,7 +3355,9 @@ void GameLayer::runOneKindofAnimation(AnimationWraper aw,CallFuncN* callback)
                 
                 MyPoint distPoint(index/kMatrixWidth,index%kMatrixWidth);
                 
-                Sprite* sparkle = Sprite::create("fireball.png");
+//                Sprite* sparkle = Sprite::create("fireball.png");
+                
+                ParticleSystemQuad *sparkle = ParticleSystemQuad::create("feilv.plist");
                 
                 Point endPosition = _gemMatrix[distPoint.x][distPoint.y]->getPosition();
                 
@@ -3207,11 +3381,11 @@ void GameLayer::runOneKindofAnimation(AnimationWraper aw,CallFuncN* callback)
                 if(i==aw.flagArrayLength-1)
                 {
                     
-                    seq = Sequence::create(DelayTime::create(i*0.1),CCCallFuncN::create(CC_CALLBACK_1(GameLayer::showSparkle, this)),MoveTo::create(kPriority5_delaytime-0.3, _gemMatrix[distPoint.x][distPoint.y]->getPosition()),/*playEffectAction,*/CallFunc::create(CC_CALLBACK_0(Sprite::removeFromParent, sparkle)),CallFunc::create(CC_CALLBACK_0(Gem::winnerModeStart,_gemMatrix[distPoint.x][distPoint.y])),callback,NULL);
+                    seq = Sequence::create(DelayTime::create(i*0.2),CCCallFuncN::create(CC_CALLBACK_1(GameLayer::showSparkle, this)),MoveTo::create(kPriority5_delaytime-0.3, _gemMatrix[distPoint.x][distPoint.y]->getPosition()),/*playEffectAction,*/CallFunc::create(CC_CALLBACK_0(Sprite::removeFromParent, sparkle)),CallFunc::create(CC_CALLBACK_0(Gem::winnerModeStart,_gemMatrix[distPoint.x][distPoint.y])),callback,NULL);
                 }
                 else
                 {
-                    seq = Sequence::create(DelayTime::create(i*0.1),CCCallFuncN::create(CC_CALLBACK_1(GameLayer::showSparkle, this)),MoveTo::create(kPriority5_delaytime-0.3, _gemMatrix[distPoint.x][distPoint.y]->getPosition()),/*playEffectAction,*/CallFunc::create(CC_CALLBACK_0(Sprite::removeFromParent, sparkle)),CallFunc::create(CC_CALLBACK_0(Gem::winnerModeStart, _gemMatrix[distPoint.x][distPoint.y]) ),NULL);
+                    seq = Sequence::create(DelayTime::create(i*0.2),CCCallFuncN::create(CC_CALLBACK_1(GameLayer::showSparkle, this)),MoveTo::create(kPriority5_delaytime-0.3, _gemMatrix[distPoint.x][distPoint.y]->getPosition()),/*playEffectAction,*/CallFunc::create(CC_CALLBACK_0(Sprite::removeFromParent, sparkle)),CallFunc::create(CC_CALLBACK_0(Gem::winnerModeStart, _gemMatrix[distPoint.x][distPoint.y]) ),NULL);
                 }
                 
                 sparkle->runAction(seq);
@@ -3620,6 +3794,9 @@ void GameLayer::skillGemChange()
     
     _gemMatrix[_selectPoint.x][_selectPoint.y]->setGemSkill(SkillNull);
     _gemMatrix[_nextPoint.x][_nextPoint.y]->setGemSkill(SkillNull);
+    _gemMatrix[_selectPoint.x][_selectPoint.y]->setNextSkill(SkillNull);
+    _gemMatrix[_nextPoint.x][_nextPoint.y]->setNextSkill(SkillNull);
+
     if (firstSkill == SkillAllSame && secondSkill == SkillAllSame)
     {
         AnimationWraper aw1(_gemMatrix[_nextPoint.x][_nextPoint.y],e_aid_all_gem,e_priority_all_gem);
@@ -4900,11 +5077,6 @@ void GameLayer::buyFiveSteps(Ref *obj)
 void GameLayer::removeNodeFromParent(Node *pSender)
 {
     _hammerSprite->setOpacity(255);
-
-    if (_propkind == PropSingle)
-    {
-        this->runAction(Sequence::create(MoveBy::create(0.05, Vec2(0, 5)),MoveBy::create(0.05, Vec2(0, -5)), MoveBy::create(0.05, Vec2(0, 5)),MoveBy::create(0.05, Vec2(0, -5)),MoveBy::create(0.05, Vec2(0, 5)),MoveBy::create(0.05, Vec2(0, -5)),NULL));
-    }
     
     pSender->removeFromParentAndCleanup(true);
     _propkind = PropNone;
@@ -4990,7 +5162,28 @@ void GameLayer::explodeAllGem(AnimationWraper aw, CallFuncN *callback)
     
 }
 
-void GameLayer::afterMatch(Ref *obj)
+void GameLayer::afterExplode(Ref *obj)
 {
     afterMatch();
+}
+
+void GameLayer::displayScore(cocos2d::Ref *obj)
+{
+    Gem *gem = (Gem*)obj;
+    Point pos = gem->getPosition();
+    for (int i = 0; i < _continueMatchTimes; i++)
+    {
+        CCLOG("%d",_continueMatchTimes);
+        this->runAction(Sequence::create(DelayTime::create(i * 0.5) , CallFuncN::create(CC_CALLBACK_1(GameLayer::addScore, this,pos)), NULL));
+    }
+}
+
+void GameLayer::addScore(Node *sender, Point pos)
+{
+    auto arm = Armature::create("jiafen");
+    _particleNode->addChild(arm);
+    arm->setPosition(pos);
+    arm->getAnimation()->playWithIndex(0);
+    
+    arm->getAnimation()->setMovementEventCallFunc(CC_CALLBACK_1(GameLayer::removeNodeFromParent, this) );
 }

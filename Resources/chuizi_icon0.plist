@@ -270,6 +270,25 @@
 				<key>offsetY</key>
 				<real>3</real>
 			</dict>
+			<key>juqi002.png</key>
+			<dict>
+				<key>width</key>
+				<integer>147</integer>
+				<key>height</key>
+				<integer>147</integer>
+				<key>originalWidth</key>
+				<integer>147</integer>
+				<key>originalHeight</key>
+				<integer>147</integer>
+				<key>x</key>
+				<integer>282</integer>
+				<key>y</key>
+				<integer>747</integer>
+				<key>offsetX</key>
+				<real>0</real>
+				<key>offsetY</key>
+				<real>0</real>
+			</dict>
 		</dict>
 		<key>metadata</key>
 		<dict>

@@ -97,6 +97,8 @@ void Ice::affected(int count)
         aw1.state = 5;
         
         _animationWraperVector->push_back(aw1);
+        
+        changeState(5);
     }
     else if(_state==0)
     {
@@ -105,6 +107,8 @@ void Ice::affected(int count)
         aw.state = 4;
         
         _animationWraperVector->push_back(aw);
+        
+        changeState(4);
     }
     else if(_state==1)
     {
@@ -113,6 +117,8 @@ void Ice::affected(int count)
         aw.state = 3;
         
         _animationWraperVector->push_back(aw);
+        
+        changeState(3);
     }
     else if(_state==2)
     {
@@ -121,6 +127,8 @@ void Ice::affected(int count)
         aw.state = 2;
         
         _animationWraperVector->push_back(aw);
+        
+        changeState(2);
     }
     else if(_state==3)
     {
@@ -129,6 +137,8 @@ void Ice::affected(int count)
         aw.state = 1;
         
         _animationWraperVector->push_back(aw);
+        
+        changeState(1);
     }
     
 }

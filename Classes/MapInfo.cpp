@@ -62,7 +62,7 @@ bool MapInfo::getJsonData(int iLev)
     if (iLev<doc.Size())
     {
         rapidjson::Value &v=doc[iLev];
-        int index = 0;
+        int index = 1;
         
         if (v[index].IsArray())
         {

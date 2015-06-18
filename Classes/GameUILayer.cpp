@@ -49,15 +49,25 @@ bool GameUILayer::init()
     
     initBG();
     
-    initData();
+    showTarget();
     
     SimpleAudioEngine::getInstance()->playBackgroundMusic("battle.mp3",true);
     
     return true;
 }
 
-void GameUILayer::initData()
+void GameUILayer::showTarget()
 {
+    LayerColor* backLayerColor = LayerColor::create(Color4B(0, 0, 0, 0));
+    this->addChild(backLayerColor,99);
+    
+    auto BG = Armature::create("bgmb_02");
+    BG->getAnimation()->playWithIndex(0);
+    BG->setPosition(VisibleRect::center() - Vec2(0, 185));
+    backLayerColor->addChild(BG,1);
+    
+    BG->getAnimation()->setMovementEventCallFunc(CC_CALLBACK_1(GameUILayer::removeTargetLayer, this,backLayerColor) );
+    
     if (m_pGameLayer)
     {
         m_pGameLayer->removeFromParentAndCleanup(true);
@@ -66,12 +76,105 @@ void GameUILayer::initData()
     m_pGameLayer = GameLayer::create();
     this->addChild(m_pGameLayer,10);
     m_pGameLayer->initPropSprite();
+    
+    m_mapTarget = DataCenter::getInstance()->getMapInfo()->getMapTarget();
+    
+    map<GemType ,int > ::iterator it = m_mapTarget.begin();
+    int index = 0;
+    while (it != m_mapTarget.end())
+    {
+        displayTarget(it->first, it->second, backLayerColor, index);
+        index++;
+        it++;
+    }
+    m_targetBG->getAnimation()->playWithIndex(3 - (int)m_mapTarget.size());
+    
+    initData();
+}
+
+void GameUILayer::displayTarget(GemType type, int num ,Node * pLayer ,int index)
+{
+    __String *str = __String::createWithFormat("%d",num);
+    LabelAtlas * labelTarget = LabelAtlas::create("0", "defen_number.png", 16, 22, '0');
+    labelTarget->setString(str->getCString());
+    
+    Sprite *sprTarget = Sprite::create();
+    switch (type)
+    {
+        case empty:
+            sprTarget->setTexture("icefloor.png");
+            break;
+        case red:
+            sprTarget->setTexture("red.png");
+            break;
+        case yellow:
+            sprTarget->setTexture("yellow.png");
+            break;
+        case blue:
+            sprTarget->setTexture("blue.png");
+            break;
+        case green:
+            sprTarget->setTexture("green.png");
+            break;
+        case purple:
+            sprTarget->setTexture("purple.png");
+            break;
+        case white:
+            sprTarget->setTexture("white.png");
+            break;
+        case ice:
+            sprTarget->setTexture("ice.png");
+            break;
+        case dragontooth:
+            sprTarget->setTexture("tooth.png");
+            break;
+        default:
+            break;
+    }
+
+    pLayer->addChild(labelTarget ,2);
+    pLayer->addChild(sprTarget, 2);
+    
+    sprTarget->setPosition(VisibleRect::center() - Vec2(100, 160 + index * 80));
+    sprTarget->setOpacity(0);
+    labelTarget->setPosition(sprTarget->getPosition() + Vec2(150, 0));
+    labelTarget->setScale(2);
+    labelTarget->setAnchorPoint(Vec2::ANCHOR_MIDDLE);
+    labelTarget->setOpacity(0);
+    
+    sprTarget->runAction(Sequence::create(DelayTime::create(0.3),FadeIn::create(0.7), NULL));
+    labelTarget->runAction(Sequence::create(DelayTime::create(0.3),FadeIn::create(0.7), NULL));
+}
+
+void GameUILayer::removeTargetLayer(Node *pSender, Node *pLayer)
+{
+    gameLayerFadeOut(pLayer,0.8);
+    pLayer->runAction(Sequence::create(DelayTime::create(0.9), CallFunc::create(CC_CALLBACK_0(Node::removeFromParent, pLayer)), NULL));
+    
+    m_pGameLayer->runAction(Sequence::create(DelayTime::create(0.9), CallFunc::create(CC_CALLBACK_0(GameLayer::appear, m_pGameLayer)), NULL));
+}
+
+void GameUILayer::initData()
+{
+//    if (m_pGameLayer)
+//    {
+//        m_pGameLayer->removeFromParentAndCleanup(true);
+//    }
+//    
+//    m_pGameLayer = GameLayer::create();
+//    this->addChild(m_pGameLayer,10);
+//    m_pGameLayer->initPropSprite();
     if (DataCenter::getInstance()->getTimeLimit())
     {
         schedule(schedule_selector(GameUILayer::limitTime), 1.0);
     }
     
     m_bWinGame = false;
+    m_iScoreNum = 0;
+    m_labelScore->setString("0");
+    m_labelScore->setScale(1);
+    DataCenter::getInstance()->setWinnerMode(false);
+    
     
     for (int i = 0; i < COLLECT_ARRAY; i++)
     {
@@ -182,7 +285,7 @@ void GameUILayer::initTop()
     m_labelOperation->setPosition(Vec2(423, 1082));
     m_labelOperation->setAnchorPoint(Vec2::ANCHOR_MIDDLE);
     
-    m_labelScore = LabelAtlas::create("9000", "defen_number.png", 16, 22, '0');
+    m_labelScore = LabelAtlas::create("0", "defen_number.png", 16, 22, '0');
     this->addChild(m_labelScore,8);
     m_labelScore->setPosition(Vec2(533, 1080));
     m_labelScore->setAnchorPoint(Vec2::ANCHOR_MIDDLE);
@@ -339,14 +442,18 @@ void GameUILayer::targetNumAndDisplay(int index,GemType type, int num)
     DataCenter::getInstance()->initMapPoint(type, m_sprTarget[index]->getPosition());
 }
 
-void GameUILayer::pauseMenu(Ref *pSender)
+void GameUILayer::addBlackLayer(LAYER_TYPE type)
 {
-    
-    Director::getInstance()->pause();
-    
     //添加一个半灰色的层
     LayerColor* backLayerColor = LayerColor::create(Color4B(25, 25, 25, 125));
     this->addChild(backLayerColor,99);
+    
+    auto BG = Armature::create("ui_db1");
+    BG->getAnimation()->playWithIndex(0);
+    BG->setPosition(VisibleRect::center());
+    
+    backLayerColor->addChild(BG,1);
+    
     //添加向下触摸屏蔽
     auto callback = [](Touch * ,Event *)
     {
@@ -357,17 +464,72 @@ void GameUILayer::pauseMenu(Ref *pSender)
     listener->setSwallowTouches(true);
     _eventDispatcher->addEventListenerWithSceneGraphPriority(listener,backLayerColor);
     
-    auto *labelItemRestar = MenuItemLabel::create(Label::createWithSystemFont("重玩", "",30 ), bind(&GameUILayer::restarGame, this, std::placeholders::_1, backLayerColor));
     
-    auto *labelItemQuit = MenuItemLabel::create(Label::createWithSystemFont("退出", "",30 ), CC_CALLBACK_1(GameUILayer::quitGame, this));
     
-    auto *labelItemContinue = MenuItemLabel::create(Label::createWithSystemFont("继续", "",30 ), bind(&GameUILayer::continueGame, this, std::placeholders::_1, backLayerColor));
-    
-    auto menu = Menu::create(labelItemContinue,labelItemRestar,labelItemQuit, NULL);
-    menu->setPosition(VisibleRect::center());
-    menu->alignItemsVerticallyWithPadding(10);
-    backLayerColor->addChild(menu);
+    switch (type)
+    {
+        case layerPause:
+        {
+            
+        }
+            break;
+        case layerTime:
+        {
+            BG->getAnimation()->setMovementEventCallFunc(CC_CALLBACK_1(GameUILayer::addTimeDown, this,backLayerColor) );
+        }
+            break;
+        default:
+            break;
+    }
 
+}
+
+void GameUILayer::pauseMenu(Ref *pSender)
+{
+    
+    //添加一个半灰色的层
+    LayerColor* backLayerColor = LayerColor::create(Color4B(25, 25, 25, 125));
+    this->addChild(backLayerColor,99);
+    
+    auto BG = Armature::create("ui_db1");
+    BG->getAnimation()->playWithIndex(0);
+    BG->setPosition(VisibleRect::center());
+    backLayerColor->addChild(BG,1);
+
+    auto cloud = Armature::create("ui_zanting");
+    cloud->getAnimation()->playWithIndex(0);
+    cloud->setPosition(VisibleRect::center() + Vec2(0, 30));
+    backLayerColor->addChild(cloud,2);
+    
+    
+        
+    //添加向下触摸屏蔽
+    auto callback = [](Touch * ,Event *)
+    {
+        return true;
+    };
+    auto listener = EventListenerTouchOneByOne::create();
+    listener->onTouchBegan = callback;
+    listener->setSwallowTouches(true);
+    _eventDispatcher->addEventListenerWithSceneGraphPriority(listener,backLayerColor);
+    
+    auto *labelItemRestar = MenuItemImage::create("icon_chonglai.png", "icon_chonglai2.png", bind(&GameUILayer::restarGame, this, std::placeholders::_1, backLayerColor));
+    
+    auto *labelItemQuit = MenuItemImage::create("icon_zhucaidan.png", "icon_zhucaidan2.png", CC_CALLBACK_1(GameUILayer::quitGame, this));
+    
+    auto *labelItemContinue = MenuItemImage::create("icon_jixu.png", "icon_jixu2.png", bind(&GameUILayer::continueGame, this, std::placeholders::_1, backLayerColor));
+    
+    auto *labelItemCha = MenuItemImage::create("icon_guanbi01_1.png", "icon_guanbi01_2.png", bind(&GameUILayer::continueGame, this, std::placeholders::_1, backLayerColor));
+    labelItemCha->setOpacity(0);
+    labelItemCha->runAction(FadeIn::create(1));
+    auto menu = Menu::create(labelItemQuit,labelItemRestar,labelItemContinue, NULL);
+    menu->setPosition(VisibleRect::center() - Vec2(0, 85));
+    menu->alignItemsHorizontallyWithPadding(100);
+    backLayerColor->addChild(menu,2);
+    
+    auto menu2 = Menu::create(labelItemCha, NULL);
+    menu2->setPosition(cloud->getPosition() + Vec2(265, 65));
+    backLayerColor->addChild(menu2,2);
 }
 
 
@@ -385,11 +547,23 @@ void GameUILayer::continueGame(Ref *pSender, Node *pNode)
     pNode->removeFromParentAndCleanup(true);
 }
 
+void GameUILayer::add5Step(Ref *pSender, Node *pNode)
+{
+    m_iOperationNum += 5;
+    __String *str = __String::createWithFormat("%d",m_iOperationNum);
+    m_labelOperation->setString(str->getCString());
+    pNode->removeFromParentAndCleanup(true);
+}
+
 void GameUILayer::restarGame(Ref *pSender,Node* pNode)
 {
     resumeGame();
     pNode->removeFromParentAndCleanup(true);
-    initData();
+    
+    gameLayerFadeOut(m_pGameLayer , 0.8);
+    
+    this->runAction(Sequence::create(DelayTime::create(0.9), CallFunc::create(CC_CALLBACK_0(GameUILayer::showTarget, this)), NULL));
+    
 }
 
 void GameUILayer::resumeGame()
@@ -397,44 +571,120 @@ void GameUILayer::resumeGame()
     Director::getInstance()->resume();
 }
 
+void GameUILayer::pauseGame()
+{
+    Director::getInstance()->pause();
+}
+
 void GameUILayer::updateOperationNum(Ref *obj)
 {
     if (!DataCenter::getInstance()->getTimeLimit())
     {
-        m_iOperationNum--;
-        __String *str = __String::createWithFormat("%d",m_iOperationNum);
-        m_labelOperation->setString(str->getCString());
+        float time = 0;
+        if (m_bWinGame)
+        {
+            time = 0.2;
+        }
+        else
+        {
+            time = 0.3;
+        }
+        m_labelOperation->runAction(Sequence::create(ScaleTo::create(time/2, 1.5),ScaleTo::create(time/2, 1) , CallFunc::create(CC_CALLBACK_0(GameUILayer::operationAnimaOver, this)), NULL));
+//        m_iOperationNum--;
+//        __String *str = __String::createWithFormat("%d",m_iOperationNum);
+//        m_labelOperation->setString(str->getCString());
     }
+}
+
+void GameUILayer::operationAnimaOver()
+{
+    m_iOperationNum--;
+    __String *str = __String::createWithFormat("%d",m_iOperationNum);
+    m_labelOperation->setString(str->getCString());
 }
 
 void GameUILayer::failGame()
 {
-    Director::getInstance()->pause();
+    addBlackLayer(layerTime);
+//    Director::getInstance()->pause();
+//    
+//    //添加一个半灰色的层
+//    LayerColor* backLayerColor = LayerColor::create(Color4B(25, 25, 25, 125));
+//    this->addChild(backLayerColor,99);
+//    //添加向下触摸屏蔽
+//    auto callback = [](Touch * ,Event *)
+//    {
+//        return true;
+//    };
+//    auto listener = EventListenerTouchOneByOne::create();
+//    listener->onTouchBegan = callback;
+//    listener->setSwallowTouches(true);
+//    _eventDispatcher->addEventListenerWithSceneGraphPriority(listener,backLayerColor);
+//    
+//    auto *labelItemRestar = MenuItemLabel::create(Label::createWithSystemFont("重新挑战", "",30 ), bind(&GameUILayer::restarGame, this, std::placeholders::_1, backLayerColor));
+//    labelItemRestar->setPosition(Vec2::ZERO);
+//    
+//    auto *labelItemQuit = MenuItemLabel::create(Label::createWithSystemFont("升级宠物", "",30 ), CC_CALLBACK_1(GameUILayer::quitGame, this));
+//    labelItemQuit->setPosition(Vec2::ZERO);
+//    
+//    
+//    auto menu = Menu::create(labelItemRestar,labelItemQuit, NULL);
+//    menu->setPosition(VisibleRect::center());
+//    menu->alignItemsHorizontallyWithPadding(20);
+//    backLayerColor->addChild(menu);
+
+}
+
+void GameUILayer::addTimeDown(Node *pSender, Node *pLayer)
+{
+    auto time = Armature::create("djs_01");
+    time->getAnimation()->playWithIndex(0);
+    time->setPosition(VisibleRect::center() + Vec2(0, 230));
+    time->getAnimation()->setMovementEventCallFunc(CC_CALLBACK_1(GameUILayer::failLayer, this,pLayer) );
+    pLayer->addChild(time,2);
     
-    //添加一个半灰色的层
-    LayerColor* backLayerColor = LayerColor::create(Color4B(25, 25, 25, 125));
-    this->addChild(backLayerColor,99);
-    //添加向下触摸屏蔽
-    auto callback = [](Touch * ,Event *)
-    {
-        return true;
-    };
-    auto listener = EventListenerTouchOneByOne::create();
-    listener->onTouchBegan = callback;
-    listener->setSwallowTouches(true);
-    _eventDispatcher->addEventListenerWithSceneGraphPriority(listener,backLayerColor);
+    auto words = Armature::create("ui_jia501");
+    words->getAnimation()->playWithIndex(0);
+    words->setPosition(VisibleRect::center() + Vec2(0, 30));
+    pLayer->addChild(words,2);
+
+    auto add = Armature::create("jiawu_icon");
+    pLayer->addChild(add,2);
+    add->setPosition(VisibleRect::center() - Vec2(100, 50));
+    add->getAnimation()->play("Animation1");
     
-    auto *labelItemRestar = MenuItemLabel::create(Label::createWithSystemFont("重新挑战", "",30 ), bind(&GameUILayer::restarGame, this, std::placeholders::_1, backLayerColor));
+    auto *labelItemRestar = MenuItemImage::create("icon_queding.png", "icon_queding2.png", bind(&GameUILayer::add5Step, this, std::placeholders::_1, pLayer));
     labelItemRestar->setPosition(Vec2::ZERO);
+
     
-    auto *labelItemQuit = MenuItemLabel::create(Label::createWithSystemFont("升级宠物", "",30 ), CC_CALLBACK_1(GameUILayer::quitGame, this));
-    labelItemQuit->setPosition(Vec2::ZERO);
+    auto menu = Menu::create(labelItemRestar, NULL);
+    menu->setPosition(VisibleRect::center() + Vec2(50, -50));
+    pLayer->addChild(menu,2);
+
+}
+
+ void GameUILayer::failLayer(Node* pSender , Node * pLayer)
+{
+    pLayer->removeAllChildren();
     
+    auto BG = Armature::create("ui_db1");
+    BG->getAnimation()->playWithIndex(0);
+    BG->setPosition(VisibleRect::center());
+    pLayer->addChild(BG,1);
     
-    auto menu = Menu::create(labelItemRestar,labelItemQuit, NULL);
-    menu->setPosition(VisibleRect::center());
-    menu->alignItemsHorizontallyWithPadding(20);
-    backLayerColor->addChild(menu);
+    auto fail = Armature::create("ui_cgsb01");
+    fail->getAnimation()->playWithIndex(0);
+    fail->setPosition(VisibleRect::center() + Vec2(0, 50));
+    pLayer->addChild(fail,2);
+
+    auto *labelItemRestar = MenuItemImage::create("icon_cxtz.png", "icon_cxtz2.png", bind(&GameUILayer::restarGame, this, std::placeholders::_1, pLayer));
+    
+    auto *labelItemQuit = MenuItemImage::create("icon_jinhua.png", "icon_jinhua2.png", CC_CALLBACK_1(GameUILayer::quitGame, this));
+    
+    auto menu = Menu::create(labelItemQuit,labelItemRestar,NULL);
+    menu->setPosition(VisibleRect::center() - Vec2(0, 65));
+    menu->alignItemsHorizontallyWithPadding(100);
+    pLayer->addChild(menu,2);
 
 }
 
@@ -450,15 +700,33 @@ void GameUILayer::limitOperatiomNum()
 {
     if (m_bWinGame)
     {
-        DataCenter::getInstance()->setWinnerMode(true);
+        
         if (m_iOperationNum == 0)
         {
-            MessageBox("YOU WIN !!!", "Congratulate");
+            if (m_pGameLayer)
+            {
+                gameLayerFadeOut(m_pGameLayer , 0.8);
+            }
+            this->runAction(Sequence::create(DelayTime::create(0.9),CallFunc::create(CC_CALLBACK_0(GameUILayer::addWinLayer, this)), NULL));
+//            DataCenter::getInstance()->setWinnerMode(true);
+//            MessageBox("YOU WIN !!!", "Congratulate");
         }
         else
         {
-            __String *str = __String::createWithFormat("%d",m_iOperationNum);
-            NotificationCenter::getInstance()->postNotification(kMSG_WinnerModeStart, str);
+            if (!DataCenter::getInstance()->getWinnerMode())
+            {
+                DataCenter::getInstance()->setWinnerMode(true);
+                auto BG = Armature::create("ui_db1");
+                BG->getAnimation()->playWithIndex(0);
+                BG->setPosition(VisibleRect::center());
+                this->addChild(BG,11);
+                BG->getAnimation()->setMovementEventCallFunc(CC_CALLBACK_1(GameUILayer::completeWords, this) );
+            }
+            else
+            {
+                __String *str = __String::createWithFormat("%d",m_iOperationNum);
+                NotificationCenter::getInstance()->postNotification(kMSG_WinnerModeStart, str);
+            }
         }
     }
     else
@@ -469,6 +737,23 @@ void GameUILayer::limitOperatiomNum()
         }
     }
 
+}
+
+void GameUILayer::completeWords(Node *pSender)
+{
+    auto BG = Armature::create("ui_mbdc01");
+    BG->getAnimation()->playWithIndex(0);
+    BG->setPosition(Vec2::ZERO);
+    pSender->addChild(BG,1);
+    
+    pSender->runAction(Sequence::create(DelayTime::create(1.5) ,FadeOut::create(1), CallFuncN::create(CC_CALLBACK_1(GameUILayer::winnerMode, this) ), NULL));
+}
+
+void GameUILayer::winnerMode(Node *pSender)
+{
+    pSender->removeFromParentAndCleanup(true);
+    __String *str = __String::createWithFormat("%d",m_iOperationNum);
+    NotificationCenter::getInstance()->postNotification(kMSG_WinnerModeStart, str);
 }
 
 void GameUILayer::limitTime(float dt)
@@ -483,10 +768,136 @@ void GameUILayer::limitTime(float dt)
     }
 }
 
+void GameUILayer::gameLayerFadeOut(Node *pSender  ,float times)
+{
+    if (pSender)
+    {
+        pSender->runAction(FadeOut::create(times));
+    }
+    Vector<Node*> children = pSender->getChildren();
+    
+    if (children.size() > 0)
+    {
+        for (int i = 0; i < children.size(); i++)
+        {
+            gameLayerFadeOut(children.at(i),times);
+        }
+    }
+}
+
+void GameUILayer::gameLayerFadeIn(Node *pSender  ,float times)
+{
+    if (pSender)
+    {
+        pSender->runAction(FadeIn::create(times));
+    }
+    Vector<Node*> children = pSender->getChildren();
+    
+    if (children.size() > 0)
+    {
+        for (int i = 0; i < children.size(); i++)
+        {
+            gameLayerFadeIn(children.at(i),times);
+        }
+    }
+}
+
+//void GameUILayer::gameLayerSetOpacity(Node *pSender)
+//{
+//    if (pSender)
+//    {
+//        pSender->setOpacity(0);
+//    }
+//    Vector<Node*> children = pSender->getChildren();
+//    
+//    if (children.size() > 0)
+//    {
+//        for (int i = 0; i < children.size(); i++)
+//        {
+//            gameLayerSetOpacity(children.at(i));
+//        }
+//    }
+//}
+
+
+void GameUILayer::addWinLayer()
+{
+    LayerColor* backLayerColor = LayerColor::create(Color4B(0, 0, 0, 0));
+    this->addChild(backLayerColor,99);
+
+    auto BG = Armature::create("ui_db1");
+    BG->getAnimation()->playWithIndex(0);
+    BG->setPosition(VisibleRect::center() - Vec2(0, 370));
+    backLayerColor->addChild(BG,1);
+    
+    auto fail = Armature::create("ui_diwen1");
+    fail->getAnimation()->playWithIndex(0);
+    fail->setPosition(VisibleRect::center() - Vec2(0, 128));
+    backLayerColor->addChild(fail,2);
+    
+    auto score = Armature::create("ui_fs");
+    score->getAnimation()->playWithIndex(0);
+    score->setPosition(VisibleRect::center() - Vec2(200, 330));
+    backLayerColor->addChild(score,2);
+    
+    auto reward = Armature::create("ui_ggjl01");//ui_fz01
+    reward->getAnimation()->playWithIndex(0);
+    reward->setPosition(VisibleRect::center() - Vec2(200, 390));
+    backLayerColor->addChild(reward,2);
+    
+    
+    //添加向下触摸屏蔽
+//    auto callback = [](Touch * ,Event *)
+//    {
+//        return true;
+//    };
+//    auto listener = EventListenerTouchOneByOne::create();
+//    listener->onTouchBegan = callback;
+//    listener->setSwallowTouches(true);
+//    _eventDispatcher->addEventListenerWithSceneGraphPriority(listener,backLayerColor);
+
+
+    auto *labelItemRestar = MenuItemImage::create("icon_chonglai.png", "icon_chonglai2.png", bind(&GameUILayer::restarGame, this, std::placeholders::_1, backLayerColor));
+    
+    auto *labelItemQuit = MenuItemImage::create("icon_zhucaidan.png", "icon_zhucaidan2.png", CC_CALLBACK_1(GameUILayer::quitGame, this));
+    
+    auto *labelItemContinue = MenuItemImage::create("icon_xiayiguan2.png", "icon_xiayiguan2.png", CC_CALLBACK_1(GameUILayer::quitGame, this));
+    
+    auto *labelItemCha = MenuItemImage::create("icon_guanbi01_1.png", "icon_guanbi01_2.png", CC_CALLBACK_1(GameUILayer::quitGame, this));
+    labelItemCha->setOpacity(0);
+    labelItemCha->runAction(FadeIn::create(1));
+    auto menu = Menu::create(labelItemQuit,labelItemRestar,labelItemContinue, NULL);
+    menu->setPosition(VisibleRect::center() - Vec2(0, 480));
+    menu->alignItemsHorizontallyWithPadding(150);
+    backLayerColor->addChild(menu,2);
+    
+    auto menu2 = Menu::create(labelItemCha, NULL);
+    menu2->setPosition(BG->getPosition() + Vec2(265, 95));
+    backLayerColor->addChild(menu2,2);
+
+    __String *str = __String::createWithFormat("%d",m_iScoreNum);
+    LabelAtlas * labelScore = LabelAtlas::create("0", "defen_number.png", 16, 22, '0');
+    labelScore->setString(str->getCString());
+    backLayerColor->addChild(labelScore,2);
+    labelScore->setPosition(Vec2(VisibleRect::center().x, score->getPositionY()));
+    labelScore->setAnchorPoint(Vec2::ANCHOR_MIDDLE);
+    labelScore->setScale(2);
+}
+
 void GameUILayer::updateCollect(Ref *obj)
 {
     __String *str = (__String*)obj;
-    GemType type = (GemType)str->intValue();
+    int iMsg = str->intValue();
+    
+    int times = iMsg/1000;
+    m_iScoreNum += times * 20;
+    __String *score = __String::createWithFormat("%d",m_iScoreNum);
+    m_labelScore->setString(score->getCString());
+    m_labelScore->setScale(1);
+    m_labelScore->stopAllActions();
+    m_labelScore->runAction(Sequence::create(ScaleTo::create(0.1, 1.2), ScaleTo::create(0.1, 1),ScaleTo::create(0.1, 1.2),ScaleTo::create(0.1, 1),NULL));
+    
+    GemType type = (GemType)(iMsg%100);
     int index = m_iArrTargetIndex[type];
     if (m_iArrTargetNum[type] > 0)
     {

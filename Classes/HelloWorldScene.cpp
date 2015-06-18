@@ -171,6 +171,21 @@ bool HelloWorld::init()
     ArmatureDataManager::getInstance()->addArmatureFileInfo("map01_line0.png" , "map01_line0.plist" , "map01_line.ExportJson");
     ArmatureDataManager::getInstance()->addArmatureFileInfo("map01_yun0.png" , "map01_yun0.plist" , "map01_yun.ExportJson");
     
+    ArmatureDataManager::getInstance()->addArmatureFileInfo("ui_zanting0.png" , "ui_zanting0.plist" , "ui_zanting.ExportJson");
+    ArmatureDataManager::getInstance()->addArmatureFileInfo("ui_db10.png" , "ui_db10.plist" , "ui_db1.ExportJson");
+    ArmatureDataManager::getInstance()->addArmatureFileInfo("jiafen0.png" , "jiafen0.plist" , "jiafen.ExportJson");
+    ArmatureDataManager::getInstance()->addArmatureFileInfo("ui_cgsb010.png" , "ui_cgsb010.plist" , "ui_cgsb01.ExportJson");
+    ArmatureDataManager::getInstance()->addArmatureFileInfo("djs_010.png" , "djs_010.plist" , "djs_01.ExportJson");
+    ArmatureDataManager::getInstance()->addArmatureFileInfo("ui_jia5010.png" , "ui_jia5010.plist" , "ui_jia501.ExportJson");
+    ArmatureDataManager::getInstance()->addArmatureFileInfo("jiugong03_effect0.png" , "jiugong03_effect0.plist" , "jiugong03_effect.ExportJson");
+    ArmatureDataManager::getInstance()->addArmatureFileInfo("jiugong04_effect0.png" , "jiugong04_effect0.plist" , "jiugong04_effect.ExportJson");
+    ArmatureDataManager::getInstance()->addArmatureFileInfo("ui_mbdc010.png" , "ui_mbdc010.plist" , "ui_mbdc01.ExportJson");
+    ArmatureDataManager::getInstance()->addArmatureFileInfo("ui_diwen10.png" , "ui_diwen10.plist" , "ui_diwen1.ExportJson");
+    ArmatureDataManager::getInstance()->addArmatureFileInfo("ui_fs0.png" , "ui_fs0.plist" , "ui_fs.ExportJson");
+    ArmatureDataManager::getInstance()->addArmatureFileInfo("ui_fz010.png" , "ui_fz010.plist" , "ui_fz01.ExportJson");
+    ArmatureDataManager::getInstance()->addArmatureFileInfo("ui_ggjl010.png" , "ui_ggjl010.plist" , "ui_ggjl01.ExportJson");
+    ArmatureDataManager::getInstance()->addArmatureFileInfo("bgmb_020.png" , "bgmb_020.plist" , "bgmb_02.ExportJson");
+
     
 //    Armature *armature1 = Armature::create( "Anemoi");
 //    armature1->setPosition(Point(visibleSize.width * 0.5, visibleSize.height * 0.9));

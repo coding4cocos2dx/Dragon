@@ -10,12 +10,20 @@ LOCAL_MODULE := cocos2dcpp_shared
 
 LOCAL_MODULE_FILENAME := libcocos2dcpp
 
-FILE_LIST := hellocpp/main.cpp
-FILE_LIST += $(wildcard $(LOCAL_PATH)/../../Classes/*.cpp)
-FILE_LIST += $(wildcard $(LOCAL_PATH)/../../Classes/*.c)
-LOCAL_SRC_FILES := $(FILE_LIST:$(LOCAL_PATH)/%=%)
+$(warning $(LOCAL_SRC_FILES))
+MY_FILES_PATH  :=  $(LOCAL_PATH) \
+$(LOCAL_PATH)/../../Classes
 
-LOCAL_C_INCLUDES := $(LOCAL_PATH)/../../Classes
+MY_FILES_SUFFIX := %.cpp %.c %.cc
+
+My_All_Files := $(foreach src_path,$(MY_FILES_PATH), $(shell find $(src_path) -type f) )
+My_All_Files := $(My_All_Files:$(MY_CPP_PATH)/./%=$(MY_CPP_PATH)%)
+MY_SRC_LIST  := $(filter $(MY_FILES_SUFFIX),$(My_All_Files))
+MY_SRC_LIST  := $(MY_SRC_LIST:$(LOCAL_PATH)/%=%)
+LOCAL_SRC_FILES := $(MY_SRC_LIST)
+
+LOCAL_C_INCLUDES := $(LOCAL_PATH)/../../Classes \
+$(LOCAL_PATH)/../../Classes/UI
 
 # _COCOS_HEADER_ANDROID_BEGIN
 # _COCOS_HEADER_ANDROID_END

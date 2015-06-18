@@ -262,13 +262,19 @@ public:
     
     void explodeAllGem(AnimationWraper aw ,CallFuncN* callback);
     
-    void afterMatch(Ref *obj);
+    void afterExplode(Ref *obj);
     
     bool autoSkill();
     
     void flyToSame(MyPoint allPos , MyPoint samePos ,GemSkill skill);
     
     void propAnimation(MyPoint mp);
+    
+    void dealGemBeforeExplode();
+    
+    void displayScore(Ref *obj);
+    
+    void addScore(Node* sender,Point pos);
 };
 
 #endif	//__DRAGONEGGTRIPLE_GAMELAYER_H__
